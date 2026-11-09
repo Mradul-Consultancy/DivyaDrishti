@@ -1,0 +1,20 @@
+{
+    "weights": [
+        0.38,
+        0.62,
+        0.0
+    ],
+    "weights_dict": {
+        "yolo26n_cls": 0.38,
+        "convnext_tiny": 0.62,
+        "efficientnet_b3": 0.0
+    },
+    "metric_optimized": "brier",
+    "val_score_before_tuning_uniform": 0.2759,
+    "val_score_after_tuning": 0.261,
+    "tuning_dataset": "data\\processed\\val",
+    "num_validation_samples": 24,
+    "grid_candidates_evaluated": 1326,
+    "data_leakage_prevented": true,
+    "protocol_note": "Tuned strictly on validation set. Test set remained completely unobserved during weight selection."
+}

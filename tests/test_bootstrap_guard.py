@@ -43,3 +43,4 @@ def test_guard_allows_above_minimum():
     result = bootstrap_confidence_intervals(df, prob_col="prob_fake", n_bootstraps=50)
     assert "roc_auc" in result
     assert "mean" in result["roc_auc"]
+

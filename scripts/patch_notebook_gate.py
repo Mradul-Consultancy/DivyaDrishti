@@ -77,3 +77,4 @@ if not work_dir_patched:
 
 NB_PATH.write_text(json.dumps(nb, ensure_ascii=False, indent=1), encoding="utf-8")
 print("✅ Notebook saved.")
+

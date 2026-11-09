@@ -1,0 +1,60 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyTorch checkpoints and large model files
+models/checkpoints/*.pth
+!models/checkpoints/.gitkeep
+
+# Datasets (large image datasets should not be committed to git)
+data/
+!data/**/.gitkeep
+!data/README.md
+
+# Large model checkpoints
+*.pt
+*.pth
+
+# Jupyter transient notebooks
+pilot_run.ipynb
+pilot_output.ipynb
+.ipynb_checkpoints/
+.pytest_cache/
+
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
