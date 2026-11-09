@@ -3,8 +3,8 @@
 # No GNU Make required.
 
 param(
-    [ValidateSet('pilot','full','reports','real','deliver','clean')]
-    [string]$target = 'pilot',
+    [ValidateSet('pilot','full','reports','real','deliver','clean','test','help')]
+    [string]$target = 'help',
     [int]$MaxVideos   = 200,
     [int]$FullEpochs  = 25,
     [string]$Env      = 'LOCAL',
@@ -13,6 +13,43 @@ param(
 
 $Env:DEEPFAKE_ENV = $Env
 $Env:QUALITY_GATE = "$QualityGate"
+
+function Show-Help {
+    Write-Host @"
+Deepfake Detection Pipeline (PowerShell Runner)
+
+Usage:
+  .\run.ps1 -target <TARGET> [options]
+
+Available Targets:
+  test     - Run the automated test suite (pytest tests/)
+  pilot    - Run pilot notebook (5 epochs, MAX_VIDEOS=200, checks val_roc_auc >= QUALITY_GATE)
+  full     - Run full training grid (25 epochs, all models/datasets; manual step)
+  reports  - Evaluate ensemble and generate evaluation reports
+  real     - Build real-life image verification set (data/real_life/)
+  deliver  - Regenerate data-only FINAL_CLIENT_DELIVERABLE.md (manual step)
+  clean    - Remove transient notebooks and temporary zip files
+  help     - Show this help message
+
+Options:
+  -MaxVideos <int>    Max videos to process for pilot (default: 200)
+  -FullEpochs <int>   Epochs for full training grid (default: 25)
+  -QualityGate <float> Validation AUC threshold for quality gate (default: 0.70)
+  -Env <string>       Execution environment: LOCAL or KAGGLE (default: LOCAL)
+
+Note: As per delivery constraints, 'full' and 'deliver' are deliberate manual steps.
+"@ -ForegroundColor Cyan
+}
+
+function Run-Test {
+    Write-Host "`n=== Running full test suite ===" -ForegroundColor Cyan
+    python -m pytest tests/ -q
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Test suite failed."
+        exit 1
+    }
+    Write-Host "✅ All tests passed." -ForegroundColor Green
+}
 
 function Run-Pilot {
     Write-Host "`n=== Pilot: face extraction & split ===" -ForegroundColor Cyan
@@ -28,9 +65,8 @@ function Run-Pilot {
 }
 
 function Run-Full {
-    Run-Pilot
-    Write-Host "`n=== Full run: training all models ===" -ForegroundColor Cyan
-    papermill pilot_run.ipynb full_run.ipynb `
+    Write-Host "`n=== Full run: training all models (Manual step, no auto-cascade) ===" -ForegroundColor Cyan
+    papermill notebooks/kaggle_pilot.ipynb full_run.ipynb `
         -p MAX_VIDEOS "None" `
         -p epochs $FullEpochs `
         -p pilot 0
@@ -70,11 +106,13 @@ function Run-Clean {
 }
 
 switch ($target) {
+    'test'    { Run-Test    }
     'pilot'   { Run-Pilot   }
     'full'    { Run-Full    }
     'reports' { Run-Reports }
     'real'    { Run-Real    }
     'deliver' { Run-Deliver }
     'clean'   { Run-Clean   }
+    'help'    { Show-Help   }
 }
 
