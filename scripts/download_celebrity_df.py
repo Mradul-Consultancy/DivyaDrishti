@@ -41,3 +41,4 @@ if __name__ == "__main__":
     parser.add_argument("--no-unzip", action="store_true", help="Do not unzip after download")
     args = parser.parse_args()
     download_celebdf(Path(args.output_dir), unzip=not args.no_unzip)
+

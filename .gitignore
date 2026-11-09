@@ -58,3 +58,9 @@ pilot_output.ipynb
 .DS_Store
 Thumbs.db
 
+# Kaggle packaging and runs
+kaggle_upload/
+staging_dataset/
+runs/
+
+
