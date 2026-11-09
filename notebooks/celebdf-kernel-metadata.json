@@ -1,0 +1,18 @@
+{
+  "id": "mradulmanimishra/deepfake-celebdf-gpu",
+  "title": "Deepfake CelebDF GPU Training",
+  "code_file": "kaggle_celebdf_train.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "mradulmanimishra/deepfake-code",
+    "reubensuju/celeb-df-v2"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
