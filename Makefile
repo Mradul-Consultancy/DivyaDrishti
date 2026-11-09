@@ -30,12 +30,11 @@ download_dfdc_from_dataset(RAW, DL, max_videos=int('$(MAX_VIDEOS)'))"
 	@echo "\n=== Pilot: face extraction & split ==="
 	papermill notebooks/kaggle_pilot.ipynb pilot_run.ipynb -p MAX_VIDEOS=$(MAX_VIDEOS) -p epochs=5 -p pilot=1
 
-full: pilot
-	@echo "\n=== Full run: training all models ==="
-	# Adjust notebook parameters for full training
-	papermill pilot_run.ipynb full_run.ipynb -p MAX_VIDEOS=None -p epochs=$(FULL_EPOCHS) -p pilot=0
+full:
+	@echo "\n=== Full run: training all models (Manual step, no auto-cascade) ==="
+	papermill notebooks/kaggle_pilot.ipynb full_run.ipynb -p MAX_VIDEOS=None -p epochs=$(FULL_EPOCHS) -p pilot=0
 
-reports: full
+reports:
 	@echo "\n=== Evaluating ensemble and generating reports ==="
 	$(PY) main.py evaluate-ensemble
 	$(PY) main.py generate-reports
@@ -43,25 +42,11 @@ reports: full
 real:
 	@echo "\n=== Building real‑life image set ==="
 	$(PY) scripts/build_real_life_dataset.py --output-dir data/real_life --num-images 2000
-	@echo "Updating data/README.md with provenance"
-	$(PY) - <<'PY'
-import pathlib, datetime
-readme = pathlib.Path('data/README.md')
-now = datetime.datetime.now().strftime('%Y-%m-%d')
-readme.write_text(f"# Real‑life image set\nGenerated on {now}.\n\n| Source | # Images | Licence |\n|--------|----------|---------|\n| StyleGAN (MIT) | 1000 | MIT |\n| Stable Diffusion (CreativeML‑OpenRAIL‑M) | 1000 | CreativeML‑OpenRAIL‑M |\n\n", encoding='utf-8')
-PY
 
-
-deliver: reports real
-	@echo "\n=== Re‑writing FINAL_CLIENT_DELIVERABLE.md ==="
-	$(PY) - <<'PY'
-import pathlib
-final_md = pathlib.Path('reports/FINAL_CLIENT_DELIVERABLE.md')
-template = pathlib.Path('templates/client_deliverable_template.md').read_text()
-final_md.write_text(template)
-print('Client deliverable regenerated.')
-PY
+deliver:
+	@echo "\n=== Regenerating FINAL_CLIENT_DELIVERABLE.md from JSON/CSV artefacts ==="
+	$(PY) scripts/regenerate_report.py
 
 clean:
 	@echo "Cleaning intermediate artefacts…"
-	rm -rf pilot_run.ipynb full_run.ipynb *.zip
+	$(PY) -c "import pathlib; [p.unlink() for p in pathlib.Path('.').glob('pilot_run.ipynb')]; [p.unlink() for p in pathlib.Path('.').glob('full_run.ipynb')]"
