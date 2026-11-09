@@ -5,6 +5,7 @@ Covers: evaluation/generate_reports.py::generate_reports_from_predictions
 import pytest
 import csv
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -26,30 +27,33 @@ def _write_predictions_csv(path: Path, n_fake: int, n_real: int):
         writer.writerows(rows)
 
 
-def test_guard_fires_below_min_videos(tmp_path):
+def test_guard_fires_below_min_videos():
     """generate_reports_from_predictions must raise RuntimeError when a class has < 10 videos."""
-    pred_csv = tmp_path / "saved_predictions.csv"
-    # 5 fake, 20 real → fake is below the default minimum of 10
-    _write_predictions_csv(pred_csv, n_fake=5, n_real=20)
-    with pytest.raises(RuntimeError, match="[Mm]inimum"):
-        generate_reports_from_predictions(
-            predictions_csv=pred_csv,
-            reports_dir=tmp_path / "reports",
-            min_videos_per_class=10,
-        )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        pred_csv = tmp_path / "saved_predictions.csv"
+        # 5 fake, 20 real → fake is below the default minimum of 10
+        _write_predictions_csv(pred_csv, n_fake=5, n_real=20)
+        with pytest.raises(RuntimeError, match="[Mm]inimum"):
+            generate_reports_from_predictions(
+                predictions_csv=pred_csv,
+                reports_dir=tmp_path / "reports",
+                min_videos_per_class=10,
+            )
 
 
-def test_guard_passes_at_minimum(tmp_path):
+def test_guard_passes_at_minimum():
     """generate_reports_from_predictions must succeed when both classes meet the minimum."""
-    pred_csv = tmp_path / "saved_predictions.csv"
-    # 10 fake, 10 real → exactly at the minimum
-    _write_predictions_csv(pred_csv, n_fake=10, n_real=10)
-    # Should not raise (may warn about small sample, but must not raise RuntimeError)
-    try:
-        generate_reports_from_predictions(
-            predictions_csv=pred_csv,
-            reports_dir=tmp_path / "reports",
-            min_videos_per_class=10,
-        )
-    except RuntimeError as e:
-        pytest.fail(f"Guard fired unexpectedly: {e}")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        pred_csv = tmp_path / "saved_predictions.csv"
+        # 10 fake, 10 real → exactly at the minimum
+        _write_predictions_csv(pred_csv, n_fake=10, n_real=10)
+        try:
+            generate_reports_from_predictions(
+                predictions_csv=pred_csv,
+                reports_dir=tmp_path / "reports",
+                min_videos_per_class=10,
+            )
+        except RuntimeError as e:
+            pytest.fail(f"Guard fired unexpectedly: {e}")
