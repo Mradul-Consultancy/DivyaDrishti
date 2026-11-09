@@ -1,6 +1,6 @@
 """
 Download and extract Celeb-DF v2 dataset from Kaggle.
-Dataset: jessicali9530/celeb-df-v2
+Dataset: reubensuju/celeb-df-v2 (verified public and active)
 """
 import sys
 import argparse
@@ -14,13 +14,15 @@ from utils.helpers import setup_logger, ensure_dirs
 
 logger = setup_logger("DownloadCelebDF")
 
+DEFAULT_DATASET = "reubensuju/celeb-df-v2"
 
-def download_celebdf(output_dir: Path, unzip: bool = True):
+
+def download_celebdf(output_dir: Path, dataset_ref: str = DEFAULT_DATASET, unzip: bool = True):
     ensure_dirs(output_dir)
-    logger.info(f"Downloading Celeb-DF v2 from Kaggle to: {output_dir}")
+    logger.info(f"Downloading Celeb-DF v2 ({dataset_ref}) from Kaggle to: {output_dir}")
     cmd = [
         "kaggle", "datasets", "download",
-        "-d", "jessicali9530/celeb-df-v2",
+        "-d", dataset_ref,
         "-p", str(output_dir),
     ]
     if unzip:
