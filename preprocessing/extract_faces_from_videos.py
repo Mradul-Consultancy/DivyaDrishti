@@ -290,6 +290,8 @@ class VideoFaceExtractor:
             celeb_test_set = IdentitySourceSplitter.parse_celeb_df_test_list(celeb_df_test_list)
         elif (video_dir / "List_of_testing_videos.txt").exists():
             celeb_test_set = IdentitySourceSplitter.parse_celeb_df_test_list(video_dir / "List_of_testing_videos.txt")
+        elif (Path(__file__).parent / "List_of_testing_videos.txt").exists():
+            celeb_test_set = IdentitySourceSplitter.parse_celeb_df_test_list(Path(__file__).parent / "List_of_testing_videos.txt")
 
         # Check FF++ splits dir
         ffpp_splits = None
