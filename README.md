@@ -129,6 +129,35 @@ python main.py verify-leakage \
 **Official Benchmark Support:**
 - **FaceForensics++ (FF++)**: `--ffpp-splits-dir <path>` containing official `train.json`, `val.json`, and `test.json`.
 - **Celeb-DF v2**: `--celeb-df-test-list <path>` containing `List_of_testing_videos.txt`.
+
+#### Split modes
+
+| Mode | Guarantee | When to use |
+|---|---|---|
+| `identity` | Strict: **no** identity (including swap donors) appears in two splits | DFDC, FF++, any dataset whose swap graph is not chained |
+| `identity_primary` | Primary identities are strictly disjoint; swap-donor overlap is measured and reported as an advisory residual | Celeb-DF v2, whose swap graph chains identities |
+| `video` | None (naive per-video split) | Debugging only |
+
+> **Why Celeb-DF needs `identity_primary`.** Celeb-DF v2's swap graph is *chained*: `id0_id16` donates
+> to `id0`, `id16_id17` donates to `id16`, and so on. Under strict union-find this merges all 59
+> identities into just 4 giant components. Any component that touches the official test list then
+> absorbs the entire dataset — extraction ends up with an empty `train/` and `val/`. Strict
+> identity-disjointness is mathematically unachievable on a chained swap graph (keeping a swap's
+> donor out of the split while keeping its base in it is a contradiction), so `identity_primary`
+> groups videos by their **primary** identity, keeps the donor relationship recorded, and reports
+> the residual donor overlap explicitly instead of shipping an unusable split.
+>
+> The audit still treats primary-identity overlap as fatal in every mode.
+
+```bash
+# Celeb-DF v2 (6,229 videos) with primary-identity disjointness
+python main.py extract-videos \
+  --split-mode identity_primary \
+  --video-dir data/raw_videos/celebdf \
+  --output-dir data/processed/celebdf \
+  --frames-per-video 5 \
+  --fallback-center-crop
+```
 - **DFDC**: `--metadata-file <path>` parsing `"original"` pristine source pointers and `"actor_id"`.
 
 A complete audit record is exported to `data/processed/video_split_manifest.json`.
