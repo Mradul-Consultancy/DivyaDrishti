@@ -304,21 +304,40 @@ class VideoFaceExtractor:
         splits: Dict[str, List[Path]] = {}
         zero_leakage_audit: Dict[str, Any] = {}
 
-        if split_mode == "identity":
+        if split_mode in ("identity", "identity_primary"):
+            link_swap_partners = (split_mode == "identity")
             if ffpp_splits:
                 splits = splitter.split_by_official_benchmark(
-                    all_videos, ffpp_splits=ffpp_splits, metadata=metadata, seed=seed
+                    all_videos, ffpp_splits=ffpp_splits, metadata=metadata, seed=seed,
+                    link_swap_partners=link_swap_partners,
                 )
-            elif celeb_test_set:
+            elif celeb_test_set and split_mode == "identity":
                 splits = splitter.split_by_official_benchmark(
-                    all_videos, celeb_df_test_list=celeb_test_set, metadata=metadata, seed=seed
+                    all_videos, celeb_df_test_list=celeb_test_set, metadata=metadata, seed=seed,
+                    link_swap_partners=link_swap_partners,
                 )
             else:
-                clusters = splitter.cluster_videos(all_videos, metadata=metadata)
+                # 'identity_primary' keeps the donor identity of a face swap out
+                # of the merge, which prevents Celeb-DF's chained swap graph
+                # from collapsing every identity into one giant cluster.
+                #
+                # It also skips the official test list: with identity-level
+                # clusters, a single test-listed video drags every video of that
+                # identity into test, which on Celeb-DF leaves only a handful of
+                # training videos. The ratio-based split below keeps train/val/
+                # test balanced while still being strictly primary-identity
+                # disjoint.
+                clusters = splitter.cluster_videos(
+                    all_videos, metadata=metadata, link_swap_partners=link_swap_partners
+                )
                 splits = splitter.split_clusters(clusters, split_ratios=split_ratios, seed=seed)
 
             # Mathematically verify zero leakage across train, val, and test splits
-            zero_leakage_audit = splitter.verify_zero_leakage(splits, metadata=metadata)
+            zero_leakage_audit = splitter.verify_zero_leakage(
+                splits,
+                metadata=metadata,
+                allow_swap_partner_overlap=(split_mode == "identity_primary"),
+            )
 
         else:
             # Naive by-video split (independent per class)

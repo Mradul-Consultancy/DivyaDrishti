@@ -200,3 +200,81 @@ class TestClusteringAndSplitting:
         with pytest.raises(DataLeakageError) as exc_info:
             splitter.verify_zero_leakage(splits, metadata=metadata)
         assert "CRITICAL DATA LEAKAGE DETECTED" in str(exc_info.value)
+
+
+class TestPrimaryIdentityMode:
+    """
+    Regression tests for the 'identity_primary' split mode.
+
+    Celeb-DF v2's swap graph chains identities together (id0_id16,
+    id16_id17, ...). Under strict mode the union-find merges those chains
+    into a handful of giant clusters, so a single official test-listed video
+    drags every video of that identity into test and the dataset collapses
+    into a single split.
+
+    'identity_primary' groups videos by their PRIMARY identity only. The
+    donor identity of a swap is recorded and reported as an advisory
+    residual instead of silently merging the groups.
+    """
+
+    def _celeb_chain(self):
+        """A minimal Celeb-DF-style swap chain: id1 donates to id0, id2 to id1."""
+        return [
+            Path("id1_0001.mp4"),   # real, identity id1
+            Path("id2_0001.mp4"),   # real, identity id2
+            Path("id0_0001.mp4"),   # real, identity id0
+            Path("id0_id1_0001.mp4"),  # swap: id0 is base, id1 is donor
+            Path("id1_id2_0001.mp4"),  # swap: id1 is base, id2 is donor
+        ]
+
+    def test_strict_mode_merges_swap_partners(self):
+        """Default (strict) mode must keep the existing chaining behaviour."""
+        splitter = IdentitySourceSplitter()
+        clusters = splitter.cluster_videos(self._celeb_chain())
+        # id0, id1 and id2 are all connected through the swap chain.
+        assert len(clusters) == 1
+
+    def test_primary_mode_keeps_identities_separate(self):
+        """Primary mode must produce one cluster per primary identity."""
+        splitter = IdentitySourceSplitter()
+        clusters = splitter.cluster_videos(self._celeb_chain(), link_swap_partners=False)
+        assert len(clusters) == 3
+
+        for c_vids in clusters.values():
+            names = {v.name for v in c_vids}
+            if "id0_id1_0001.mp4" in names:
+                # The swap stays with its PRIMARY identity (id0) only.
+                assert "id0_0001.mp4" in names
+                assert "id1_0001.mp4" not in names
+
+    def test_primary_mode_audit_passes_and_reports_residual(self):
+        """The audit must pass and report donor overlap as advisory."""
+        splitter = IdentitySourceSplitter()
+        videos = self._celeb_chain()
+        clusters = splitter.cluster_videos(videos, link_swap_partners=False)
+        splits = splitter.split_clusters(clusters, split_ratios=(0.34, 0.33, 0.33), seed=1)
+
+        audit = splitter.verify_zero_leakage(
+            splits, allow_swap_partner_overlap=True
+        )
+        assert audit["zero_leakage_guaranteed"] is True
+        assert audit["swap_partner_overlap_is_advisory"] is True
+        # Primary identities never overlap.
+        assert audit["train_test_identity_overlap"] == []
+        assert audit["train_val_identity_overlap"] == []
+        assert audit["val_test_identity_overlap"] == []
+
+    def test_primary_mode_still_raises_on_real_primary_leak(self):
+        """
+        Primary-identity overlap must still be fatal even in advisory mode -
+        only DONOR overlap is downgraded to a warning.
+        """
+        splitter = IdentitySourceSplitter()
+        splits = {
+            "train": [Path("id0_0001.mp4")],
+            "val":   [Path("id3_0001.mp4")],
+            "test":  [Path("id0_0002.mp4")],   # same primary identity as train
+        }
+        with pytest.raises(DataLeakageError) as exc_info:
+            splitter.verify_zero_leakage(splits, allow_swap_partner_overlap=True)
+        assert "LEAKAGE DETECTED" in str(exc_info.value)

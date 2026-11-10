@@ -94,7 +94,11 @@ Examples:
     p_vid = subparsers.add_parser("extract-videos", help="Extract N frames per video, crop faces with MTCNN, and split by identity/source")
     p_vid.add_argument("--video-dir", type=str, default="data/raw_videos", help="Directory with real/ and fake/ video folders")
     p_vid.add_argument("--output-dir", type=str, default=str(config.PROCESSED_DATA_DIR), help="Destination split directory")
-    p_vid.add_argument("--split-mode", type=str, default="identity", choices=["identity", "video"], help="Splitting strategy: 'identity' (disjoint clusters) or 'video' (naive)")
+    p_vid.add_argument("--split-mode", type=str, default="identity",
+                       choices=["identity", "identity_primary", "video"],
+                       help="Splitting strategy: 'identity' (disjoint clusters), "
+                            "'identity_primary' (primary-identity clusters; donor identities "
+                            "of face swaps are reported as advisory residual), or 'video' (naive)")
     p_vid.add_argument("--metadata-file", type=str, default=None, help="Path to DFDC metadata.json or custom dataset metadata")
     p_vid.add_argument("--celeb-df-test-list", type=str, default=None, help="Path to Celeb-DF List_of_testing_videos.txt")
     p_vid.add_argument("--ffpp-splits-dir", type=str, default=None, help="Path to FF++ splits directory containing train.json, val.json, test.json")

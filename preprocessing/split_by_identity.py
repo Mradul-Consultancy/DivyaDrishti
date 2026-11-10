@@ -68,6 +68,9 @@ class IdentitySourceSplitter:
 
     def __init__(self, logger=None):
         self.logger = logger or setup_logger("IdentitySourceSplitter")
+        # video_name -> (primary_identity, donor_identity) for face-swap videos.
+        # Populated only when cluster_videos(link_swap_partners=False).
+        self._swap_partner_links: Dict[str, Tuple[str, str]] = {}
 
     @staticmethod
     def parse_dfdc_metadata(metadata_file: Path | str) -> Dict[str, Dict[str, Any]]:
@@ -183,13 +186,35 @@ class IdentitySourceSplitter:
     def cluster_videos(
         self,
         video_files: List[Path],
-        metadata: Optional[Dict[str, Dict[str, Any]]] = None
+        metadata: Optional[Dict[str, Dict[str, Any]]] = None,
+        link_swap_partners: bool = True
     ) -> Dict[str, List[Path]]:
         """
         Uses Disjoint-Set connected components to cluster all videos by identity or source video.
         Ensures that:
         - Real video and all its derivative fakes belong to the SAME cluster.
         - Videos of the same actor belong to the SAME cluster.
+
+        Parameters
+        ----------
+        link_swap_partners:
+            When True (default, strict mode), a face-swap video also merges the
+            donor identity's group into the primary identity's group. This
+            guarantees that no identity appears in two splits.
+
+            When False, only the PRIMARY identity (key1) groups videos together;
+            the donor identity (key2) is recorded but does not merge the groups.
+
+            Why this exists: Celeb-DF v2's swap graph chains identities together
+            (id0_id16, id16_id17, ...), so strict merging collapses all 59
+            identities into a handful of giant components. A component that
+            touches the official test list then swallows the entire dataset,
+            leaving train/val empty. Strict identity-disjointness is
+            mathematically unachievable on a chained swap graph - the two
+            requirements contradict each other. This flag lets a caller choose
+            primary-identity disjointness and measure the residual
+            donor-identity overlap explicitly instead of getting an unusable
+            split.
         """
         ds = DisjointSet()
         file_by_name: Dict[str, Path] = {p.name: p for p in video_files}
@@ -223,8 +248,17 @@ class IdentitySourceSplitter:
             if key2:
                 node2 = f"cluster_{key2}"
                 # In face swaps, connect both identities so neither leaks across splits
-                ds.union(vid_name, node2)
-                ds.union(node1, node2)
+                if link_swap_partners:
+                    ds.union(vid_name, node2)
+                    ds.union(node1, node2)
+                else:
+                    # Record the donor relationship WITHOUT merging the donor's
+                    # group into this one. Note that unioning the video to
+                    # node2 would transitively merge the two identity groups
+                    # anyway (node2 already owns every video whose primary
+                    # identity is the donor), which is what chains Celeb-DF's
+                    # identities into giant clusters.
+                    self._swap_partner_links.setdefault(vid_name, (key1, key2))
 
         # 3. Group video files by their root component
         clusters: Dict[str, List[Path]] = defaultdict(list)
@@ -303,13 +337,19 @@ class IdentitySourceSplitter:
         celeb_df_test_list: Optional[Set[str]] = None,
         metadata: Optional[Dict[str, Dict[str, Any]]] = None,
         train_val_ratio: float = 0.85,
-        seed: int = 42
+        seed: int = 42,
+        link_swap_partners: bool = True
     ) -> Dict[str, List[Path]]:
         """
         Splits videos conforming strictly to official benchmark protocols:
         - FaceForensics++: Uses official train.json, val.json, test.json split ID sets.
         - Celeb-DF v2: Uses official List_of_testing_videos.txt. Any cluster touching a test video
           is assigned to test; remaining clusters are split into train and val.
+
+        link_swap_partners=False keeps donor identities out of the cluster merge.
+        This matters for Celeb-DF: with strict merging the swap graph chains all
+        identities into a few giant clusters, so every cluster touches the
+        official test list and the whole dataset collapses into test.
         """
         splits: Dict[str, List[Path]] = {"train": [], "val": [], "test": []}
 
@@ -330,7 +370,9 @@ class IdentitySourceSplitter:
 
         elif celeb_df_test_list:
             self.logger.info("Splitting by official Celeb-DF v2 test list...")
-            clusters = self.cluster_videos(video_files, metadata=metadata)
+            clusters = self.cluster_videos(
+                video_files, metadata=metadata, link_swap_partners=link_swap_partners
+            )
             test_clusters = set()
 
             for c_key, c_vids in clusters.items():
@@ -377,14 +419,25 @@ class IdentitySourceSplitter:
     def verify_zero_leakage(
         self,
         splits: Dict[str, List[Path]],
-        metadata: Optional[Dict[str, Dict[str, Any]]] = None
+        metadata: Optional[Dict[str, Dict[str, Any]]] = None,
+        allow_swap_partner_overlap: bool = False
     ) -> Dict[str, Any]:
         """
         Audits partition to mathematically verify zero identity or source video leakage.
         Raises DataLeakageError if ANY identity or source video crosses split boundaries.
+
+        Parameters
+        ----------
+        allow_swap_partner_overlap:
+            When True, the donor identity of a face swap (key2) is treated as an
+            advisory metric rather than a hard violation: overlap there is
+            reported under ``swap_partner_identity_overlap`` but does not raise.
+            The PRIMARY identity (key1) must still be strictly disjoint across
+            train/val/test - that check always runs and always raises.
         """
         split_sources: Dict[str, Set[str]] = defaultdict(set)
         split_identities: Dict[str, Set[str]] = defaultdict(set)
+        split_donor_identities: Dict[str, Set[str]] = defaultdict(set)
 
         for s_name, vid_list in splits.items():
             for v_path in vid_list:
@@ -405,8 +458,12 @@ class IdentitySourceSplitter:
                 split_sources[s_name].add(k1)
                 split_identities[s_name].add(k1)
                 if k2:
-                    split_sources[s_name].add(k2)
-                    split_identities[s_name].add(k2)
+                    if allow_swap_partner_overlap:
+                        # Donor identity is advisory in this mode.
+                        split_donor_identities[s_name].add(k2)
+                    else:
+                        split_sources[s_name].add(k2)
+                        split_identities[s_name].add(k2)
 
         # Audit pairwise intersections
         overlap_train_val_src = split_sources["train"] & split_sources["val"]
@@ -429,6 +486,24 @@ class IdentitySourceSplitter:
             "train_test_identity_overlap": list(overlap_train_test_id),
             "val_test_identity_overlap": list(overlap_val_test_id)
         }
+
+        if allow_swap_partner_overlap:
+            # Advisory only: report how many donor identities recur across
+            # splits. This is the residual that strict mode eliminates by
+            # merging swap partners (which collapses Celeb-DF into one cluster).
+            donor_overlap = {
+                "train_val": sorted(split_donor_identities["train"] & split_donor_identities["val"]),
+                "train_test": sorted(split_donor_identities["train"] & split_donor_identities["test"]),
+                "val_test": sorted(split_donor_identities["val"] & split_donor_identities["test"]),
+            }
+            audit_report["swap_partner_identity_overlap"] = donor_overlap
+            audit_report["swap_partner_overlap_is_advisory"] = True
+            audit_report["note"] = (
+                "Primary identities are strictly disjoint across train/val/test. "
+                "Donor identities of face swaps may recur across splits; this is "
+                "reported for transparency and is inherent to Celeb-DF's chained "
+                "swap graph, where strict identity-disjointness is unachievable."
+            )
 
         if overlap_train_test_src:
             audit_report["zero_leakage_guaranteed"] = False
