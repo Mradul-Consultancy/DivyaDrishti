@@ -160,6 +160,65 @@ which is exactly the layout `scripts/build_cross_table.py` looks for, so
 the cross-dataset table gains genuine per-domain rows instead of
 shared-checkpoint duplicates.
 
+### Kaggle GPU Kernels — Not Usable (2026-11-10)
+
+Both kernels (`deepfake-pilot-gpu`, `deepfake-celebdf-gpu-training`) were
+pushed with `--accelerator NvidiaTeslaT4` and re-run, but both **failed**:
+
+| Failure | Detail |
+|---|---|
+| No internet | DNS resolution fails for `pypi.org`, `api.kaggle.com` and `github.com`, so `pip install` of `ultralytics` / `facenet-pytorch` fails and `git clone` cannot reach GitHub. |
+| Dataset not mounted | `/kaggle/input/deepfake-code` does not exist inside the kernel, so the codebase is unavailable. |
+
+The notebooks were still fixed in response (mount now handles both the zipped
+and the already-extracted dataset layout; dependency installation is
+conditional and never aborts the run; the invalid `!git clone` inside an
+`if` block was replaced). The notebooks remain the portable path for anyone
+running where Kaggle's sandbox has working networking.
+
+**Local GPU training is the path actually used** — see above.
+
+### Full Celeb-DF v2 Dataset Acquired and Extracted (2026-11-10)
+
+The complete Celeb-DF v2 dataset was downloaded from Kaggle
+(`reubensuju/celeb-df-v2`, 9.29 GB, 6,229 videos: 590 real + 5,639 synthesis)
+and extracted with the new `identity_primary` split mode.
+
+| Split | Real | Fake | Total | Videos |
+|---|---|---|---|---|
+| train | 436 | 3,942 | 4,378 | 4,378 (1 frame each) |
+| val | 380 | 4,275 | 4,655 | 947 |
+| test | 425 | 4,440 | 4,865 | 969 |
+
+All 31,141 extracted face crops are identity-disjoint across splits on the
+primary identity. Training uses one frame per video so that every source
+video and identity is represented, which matters more for generalisation
+than additional frames of the same video.
+
+DFDC was also re-extracted at 10 frames per video (previously only ~2), giving
+1,807 train / 320 val / 60 test images across 212 videos, up from 292 training
+images across 27 videos.
+
+Note that Celeb-DF v2 is inherently imbalanced (590 real vs 5,639 synthesis
+videos); the pipeline's inverse-frequency class weighting handles this, but
+accuracy on the validation split is therefore not directly comparable to a
+balanced set — AUC is the meaningful metric.
+
+### Training Grid Must Run One Model per Process (2026-11-10)
+
+Running the whole grid in a single process (`train-all-datasets --datasets
+celebdf dfdc`) crashed with a native CUDA abort (0xC0000409, raised from
+`c10/util/AbortHandler.h` inside `torch::autograd::THPCppFunction_requires_grad`)
+at the *first batch* of the first model of the second dataset — i.e. immediately
+after Ultralytics YOLO training had finished in the same process.
+
+Celeb-DF completed all three models before the crash; DFDC's EfficientNet-B3
+died on batch 0 and had to be run in a fresh process, where it trained normally.
+
+**Practical rule: run one model per process.** The grid script should spawn a
+subprocess per (dataset, model) rather than looping inside one interpreter,
+so a CUDA-context problem in one backend cannot take down the rest.
+
 ---
 
 ## Next Steps for Delivery Readiness
