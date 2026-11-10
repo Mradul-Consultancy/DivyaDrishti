@@ -27,6 +27,7 @@ agree with a hand-computed reference.
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -179,3 +180,66 @@ class TestCrossTableHasNoHardcodedMetrics:
             "roc_auc_score() must not be used with P(fake) scores: it defaults "
             f"to pos_label=1 and returns 1 - AUC. Offending lines: {offending}"
         )
+
+
+class TestEnsembleSampleAlignment:
+    """
+    The soft-voting ensemble must combine probabilities for the SAME image.
+
+    Regression test: the YOLO branch used to build its own file list in
+    ["real", "fake"] order while the timm branches used DeepfakeDataset's
+    alphabetical ("fake", "real") order. The two probability arrays were
+    therefore misaligned, and the ensemble averaged a fake image's YOLO
+    probability with a real image's timm probabilities - producing nonsense
+    AUCs (e.g. 0.1100 on Celeb-DF, below both of its members).
+    """
+
+    @pytest.fixture(scope="class")
+    def module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "build_cross_table",
+            Path(__file__).resolve().parent.parent / "scripts" / "build_cross_table.py",
+        )
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m
+
+    def test_collect_samples_matches_dataset_order(self, module):
+        """_collect_samples must produce the same order as DeepfakeDataset."""
+        from training.dataset import DeepfakeDataset
+
+        # NOTE: pytest's tmp_path fixture cannot be used here - on this
+        # machine the pytest temp root raises PermissionError. Use
+        # tempfile.TemporaryDirectory, matching tests/test_min_videos_per_class.py.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for cls in ("fake", "real"):
+                d = root / cls
+                d.mkdir()
+                for i in range(3):
+                    (d / f"img_{i}.jpg").write_bytes(b"x")
+
+            ds = DeepfakeDataset(root)
+            expected = [(str(p), lbl) for p, lbl in ds.samples]
+
+            actual = [(str(p), lbl) for p, lbl in module._collect_samples(root)]
+            assert actual == expected, (
+                "_collect_samples order diverges from DeepfakeDataset; the "
+                "ensemble would combine probabilities from different images."
+            )
+
+    def test_collect_samples_is_fake_first(self, module):
+        """Alphabetical class order means fake (0) precedes real (1)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for cls in ("fake", "real"):
+                d = root / cls
+                d.mkdir()
+                (d / "a.jpg").write_bytes(b"x")
+
+            samples = module._collect_samples(root)
+            labels = [lbl for _, lbl in samples]
+            assert labels == sorted(labels), (
+                f"Expected fake-then-real ordering, got {labels}"
+            )

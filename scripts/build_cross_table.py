@@ -275,7 +275,6 @@ def evaluate_yolo_on_dir(
 
     if not image_paths:
         return None
-
     y_true, y_probs_all = [], []
     # YOLO inference in batches of image file paths
     all_paths = [str(p) for p, _ in image_paths]
@@ -296,6 +295,32 @@ def evaluate_yolo_on_dir(
 
 
 # ── Soft-voting ensemble evaluator ─────────────────────────────────────────
+
+def _collect_samples(eval_path: Path) -> List[Tuple[Path, int]]:
+    """
+    Builds the canonical (path, label) sample list for a test directory.
+
+    Order MUST be identical for every model in the ensemble, otherwise the
+    per-model probability arrays are misaligned and the soft-voting average
+    mixes probabilities belonging to different images.
+
+    The order matches training.dataset.DeepfakeDataset: classes sorted
+    alphabetically ('fake' before 'real'), files in directory-glob order.
+    """
+    valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+    samples: List[Tuple[Path, int]] = []
+    dir_classes = sorted([d.name for d in eval_path.iterdir() if d.is_dir()])
+    for class_name in dir_classes:
+        label_idx = config.CLASS_TO_IDX.get(class_name)
+        if label_idx is None:
+            continue
+        class_folder = eval_path / class_name
+        if not class_folder.exists():
+            continue
+        for img_path in class_folder.glob("*"):
+            if img_path.suffix.lower() in valid_exts:
+                samples.append((img_path, label_idx))
+    return samples
 
 def evaluate_ensemble_on_dir(
     timm_checkpoints: Dict[str, Path],     # {display_name: ckpt_path}
@@ -346,22 +371,26 @@ def evaluate_ensemble_on_dir(
         if ground_truth is None:
             ground_truth = np.array(labels_list)
 
-    # YOLO probs
+    # YOLO probs.
+    #
+    # The file list is built from _collect_samples() so it is in the SAME
+    # order as the timm arrays above. Previously this used a separate
+    # ["real", "fake"] listing, which reversed the class order relative to
+    # DeepfakeDataset and silently paired each image's YOLO probability with
+    # a different image's timm probabilities.
     if yolo_checkpoint.exists():
         from ultralytics import YOLO
         yolo = YOLO(str(yolo_checkpoint))
         names = yolo.names
         fake_idx = next((k for k, v in names.items() if v.lower() == "fake"), 0)
-        valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-        image_paths = []
-        for cls_name in ["real", "fake"]:
-            cls_dir = eval_path / cls_name
-            if cls_dir.exists():
-                image_paths.extend(p for p in cls_dir.iterdir() if p.suffix.lower() in valid_exts)
-        device_str = "0" if device.type == "cuda" else "cpu"
-        results = yolo.predict([str(p) for p in image_paths], imgsz=224, batch=batch_size,
-                               device=device_str, verbose=False)
-        model_probs["YOLO26n-cls"] = np.array([float(r.probs.data.cpu().numpy()[fake_idx]) for r in results])
+        samples = _collect_samples(eval_path)
+        if samples:
+            device_str = "0" if device.type == "cuda" else "cpu"
+            results = yolo.predict([str(p) for p, _ in samples], imgsz=224, batch=batch_size,
+                                   device=device_str, verbose=False)
+            model_probs["YOLO26n-cls"] = np.array(
+                [float(r.probs.data.cpu().numpy()[fake_idx]) for r in results]
+            )
 
     if not model_probs or ground_truth is None:
         return None
