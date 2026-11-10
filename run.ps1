@@ -48,7 +48,7 @@ function Run-Test {
         Write-Error "Test suite failed."
         exit 1
     }
-    Write-Host "✅ All tests passed." -ForegroundColor Green
+    Write-Host "[ok] All tests passed." -ForegroundColor Green
 }
 
 function Run-Pilot {
@@ -61,7 +61,7 @@ function Run-Pilot {
         Write-Error "Pilot notebook failed — check pilot_run.ipynb for details."
         exit 1
     }
-    Write-Host "✅ Pilot complete." -ForegroundColor Green
+    Write-Host "[ok] Pilot complete." -ForegroundColor Green
 }
 
 function Run-Full {
@@ -74,7 +74,7 @@ function Run-Full {
         Write-Error "Full-run notebook failed — check full_run.ipynb."
         exit 1
     }
-    Write-Host "✅ Full run complete." -ForegroundColor Green
+    Write-Host "[ok] Full run complete." -ForegroundColor Green
 }
 
 function Run-Reports {
@@ -82,27 +82,27 @@ function Run-Reports {
     python main.py evaluate-ensemble
     python main.py generate-reports
     if ($LASTEXITCODE -ne 0) { Write-Error "Report generation failed."; exit 1 }
-    Write-Host "✅ Reports written to reports/" -ForegroundColor Green
+    Write-Host "[ok] Reports written to reports/" -ForegroundColor Green
 }
 
 function Run-Real {
     Write-Host "`n=== Building real-life image set ===" -ForegroundColor Cyan
     python scripts/build_real_life_dataset.py --output-dir data/real_life --num-images 2000
     if ($LASTEXITCODE -ne 0) { Write-Error "Real-life dataset build failed."; exit 1 }
-    Write-Host "✅ Real-life image set ready." -ForegroundColor Green
+    Write-Host "[ok] Real-life image set ready." -ForegroundColor Green
 }
 
 function Run-Deliver {
     Write-Host "`n=== Regenerating FINAL_CLIENT_DELIVERABLE.md ===" -ForegroundColor Cyan
     python scripts/regenerate_report.py
     if ($LASTEXITCODE -ne 0) { Write-Error "Report regeneration failed."; exit 1 }
-    Write-Host "✅ Client deliverable updated." -ForegroundColor Green
+    Write-Host "[ok] Client deliverable updated." -ForegroundColor Green
 }
 
 function Run-Clean {
     Write-Host "`n=== Cleaning intermediate artefacts ===" -ForegroundColor Cyan
     Remove-Item -ErrorAction SilentlyContinue pilot_run.ipynb, full_run.ipynb, *.zip
-    Write-Host "✅ Clean complete." -ForegroundColor Green
+    Write-Host "[ok] Clean complete." -ForegroundColor Green
 }
 
 switch ($target) {
