@@ -10,6 +10,16 @@ Usage as a standalone script:
 Usage via pytest:
     pytest -v tests/test_leakage.py
 """
+import sys
+
+# The Windows console uses cp1252, which cannot encode emoji/arrows. Force
+# UTF-8 output so this script never crashes after doing its work.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover
+    pass
+
 
 import os
 import re

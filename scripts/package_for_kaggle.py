@@ -4,7 +4,15 @@ Excludes data/, __pycache__/, .git/, *.pyc, staging_dataset/, kaggle_upload/, ka
 """
 import zipfile
 import os
+import sys
 from pathlib import Path
+
+# The Windows console uses cp1252, which cannot encode arrows or emoji.
+# Force UTF-8 output so this script never crashes after doing its work.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover
+    pass
 
 REPO = Path(r'e:\deepfake')
 OUT  = REPO / 'kaggle_upload' / 'deepfake_code.zip'
@@ -17,7 +25,7 @@ EXCLUDES = {
 }
 EXCLUDE_SUFFIXES = {'.pyc', '.pyo', '.log', '.tmp', '.pth', '.pt', '.tar', '.gz'}
 EXCLUDE_PARTS = {'checkpoints', '__pycache__', '.pytest_cache', '.git'}
-EXCLUDE_FILES = {'deepfake_code.zip', "2.0.0'"}
+EXCLUDE_FILES = {'deepfake_code.zip'}
 
 count = 0
 with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as zf:

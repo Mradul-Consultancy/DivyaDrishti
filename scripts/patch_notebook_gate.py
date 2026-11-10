@@ -4,6 +4,16 @@ Patch kaggle_pilot.ipynb:
 2. Fix WORK_DIR to point to REPO_DIR (not /kaggle/working) when running locally.
 Run: python scripts/patch_notebook_gate.py
 """
+import sys
+
+# The Windows console uses cp1252, which cannot encode emoji/arrows. Force
+# UTF-8 output so this script never crashes after doing its work.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover
+    pass
+
 import json
 from pathlib import Path
 

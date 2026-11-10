@@ -12,6 +12,16 @@ Automates:
 4. Ensuring that for any extracted fake video, its original real source video
    is also preserved to maintain zero-leakage identity clustering.
 """
+import sys
+
+# The Windows console uses cp1252, which cannot encode emoji/arrows. Force
+# UTF-8 output so this script never crashes after doing its work.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover
+    pass
+
 
 import os
 import sys
