@@ -138,6 +138,9 @@ Examples:
     p_all.add_argument("--epochs",     type=int, default=25)
     p_all.add_argument("--batch-size", type=int, default=32)
     p_all.add_argument("--patience",   type=int, default=7)
+    p_all.add_argument("--num-workers", type=int, default=config.NUM_WORKERS,
+                       help="DataLoader workers. On a many-core CPU box a low value "
+                            "makes GPU training dataloader-bound.")
     p_all.add_argument("--pilot",      action="store_true", help="Quick 5-epoch smoke-test")
     p_all.add_argument("--skip-yolo",  action="store_true", help="Skip YOLO training")
     p_all.add_argument("--force",      action="store_true", help="Re-train even if checkpoint exists")

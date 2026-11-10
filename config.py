@@ -3,6 +3,7 @@ Central configuration for Deepfake Detection Pipeline.
 """
 
 from pathlib import Path
+import os
 import torch
 
 # Base directories
@@ -33,7 +34,10 @@ TEST_DIR = PROCESSED_DATA_DIR / "test"
 # Image and Model Settings
 IMAGE_SIZE = (224, 224)  # (Height, Width) for standard CNN backbones
 BATCH_SIZE = 32
-NUM_WORKERS = 2
+# DataLoader workers. JPEG decode + heavy augmentation is the bottleneck for
+# GPU training, so this should be scaled with the host's core count rather
+# than left at 2 (which leaves a GPU idle waiting for data).
+NUM_WORKERS = min(8, max(2, (os.cpu_count() or 4) - 1))
 NUM_CLASSES = 2
 
 # Standard PyTorch ImageFolder and Ultralytics YOLO sort directories alphabetically:
