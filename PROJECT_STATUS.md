@@ -133,6 +133,33 @@ dfdc/val/{fake,real} →  10 each
 dfdc/test/{fake,real}→  30 each
 ```
 
+
+### GPU Training (Local RTX 2050) — 2026-11-10
+
+The Kaggle GPU kernels could not complete a training run:
+- The sandbox had **no DNS/internet**, so `pip install` of `ultralytics` /
+  `facenet-pytorch` failed and `git clone` could not reach GitHub.
+- The `deepfake-code` dataset did not mount at `/kaggle/input/deepfake-code`.
+
+A CUDA build of PyTorch was installed locally instead:
+
+```
+pip install "torch==2.9.1+cu128" "torchvision==0.24.1+cu128" \
+    --index-url https://download.pytorch.org/whl/cu128 --no-deps
+```
+
+Verified: `torch.cuda.is_available() == True`,
+`NVIDIA GeForce RTX 2050`, compute capability (8, 6), 4.29 GB VRAM.
+
+`config.DEVICE` resolves to `cuda` automatically, and the training loop
+enables mixed precision (`torch.amp.autocast` + `GradScaler`) when the
+device is CUDA, so no code changes were needed to train on the GPU.
+
+Per-domain checkpoints are written to `models/checkpoints/<dataset>/`,
+which is exactly the layout `scripts/build_cross_table.py` looks for, so
+the cross-dataset table gains genuine per-domain rows instead of
+shared-checkpoint duplicates.
+
 ---
 
 ## Next Steps for Delivery Readiness
