@@ -9,10 +9,13 @@ Training-domain × Test-domain matrix:
                     Test: CelebDF  Test: DFDC  Test: Real-Life
   Train: CelebDF   [in-domain]    [cross]      [cross]
   Train: DFDC      [cross]        [in-domain]  [cross]
-  Train: Both*     [pooled]       [pooled]     [pooled]
 
-  (* "Both" row uses checkpoints from whichever dataset produced the
-     higher val-accuracy, acting as a simple model-selection baseline.)
+  A row is only meaningful if a *domain-specific* checkpoint exists for that
+  training domain (``models/checkpoints/<domain>/<model>_best.pth``). When no
+  such checkpoint exists the shared/global checkpoint is used instead and the
+  row is explicitly labelled as such in the output, because evaluating the
+  same weights under two different "Trained on" labels would misrepresent the
+  experiment.
 
 Outputs
 -------
@@ -45,6 +48,15 @@ import config
 from utils.helpers import setup_logger, ensure_dirs
 from evaluation.evaluate_cross_dataset import resolve_test_split
 
+# The console summary contains box-drawing/arrow characters. On Windows the
+# default console encoding is cp1252, which cannot represent them and raises
+# UnicodeEncodeError - so force UTF-8 output with a replacement fallback.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover - non-reconfigurable stream
+    pass
+
 # ── Logging ────────────────────────────────────────────────────────────────
 OUT_DIR = config.REPORTS_DIR / "cross_dataset"
 ensure_dirs(OUT_DIR)
@@ -68,13 +80,94 @@ TIMM_MODELS = {
 }
 
 
-def _timm_checkpoint(train_ds: str, model_name: str) -> Path:
-    return config.CHECKPOINT_DIR / train_ds / f"{model_name}_best.pth"
+def _timm_checkpoint(train_ds: str, model_name: str) -> Tuple[Path, bool]:
+    """
+    Resolves the checkpoint for a training domain.
+
+    Returns (path, is_domain_specific). ``is_domain_specific`` is False when
+    the domain-specific checkpoint is missing and the shared/global checkpoint
+    is substituted - in that case the row is NOT a genuine cross-domain
+    experiment and must be labelled as such in the report.
+    """
+    p = config.CHECKPOINT_DIR / train_ds / f"{model_name}_best.pth"
+    if p.exists():
+        return p, True
+    fallback = config.CHECKPOINT_DIR / f"{model_name}_best.pth"
+    if fallback.exists():
+        return fallback, False
+    return p, False
 
 
-def _yolo_checkpoint(train_ds: str) -> Path:
+def _yolo_checkpoint(train_ds: str) -> Tuple[Path, bool]:
+    """
+    Resolves the YOLO checkpoint for a training domain. See _timm_checkpoint.
+
+    Canonical layout is ``runs/yolo_cls/<dataset>/deepfake_<dataset>/weights/best.pt``.
+    Older runs wrote to ``runs/yolo_cls/<run_name>/weights/best.pt`` without the
+    dataset directory, so both are probed.
+    """
     run_name = f"deepfake_{train_ds}"
-    return config.BASE_DIR / "runs" / "yolo_cls" / train_ds / run_name / "weights" / "best.pt"
+    candidates = [
+        config.BASE_DIR / "runs" / "yolo_cls" / train_ds / run_name / "weights" / "best.pt",
+        config.BASE_DIR / "runs" / "yolo_cls" / run_name / "weights" / "best.pt",
+        config.BASE_DIR / "runs" / "yolo_cls" / "deepfake_yolo" / "weights" / "best.pt",
+    ]
+    for i, c in enumerate(candidates):
+        if c.exists():
+            # Only the first (dataset-scoped) candidate counts as domain-specific.
+            return c, (i == 0)
+    return candidates[0], False
+
+
+# ── Shared metric computation ────────────────────────────────────────────────
+#
+# Label convention (see config.py): FAKE = 0, REAL = 1.
+#
+# Every probability below is P(fake). Therefore the positive class for
+# ROC-AUC is FAKE, and the decision rule is "prob_fake >= threshold -> FAKE".
+#
+# NOTE: sklearn's roc_auc_score() defaults to pos_label=1, which would treat
+# REAL as the positive class and silently return 1 - AUC when fed P(fake).
+# We therefore always use roc_curve(..., pos_label=FAKE_LABEL_IDX) + auc(),
+# matching evaluation/evaluate_ensemble.py and evaluation/generate_reports.py.
+
+def _compute_metrics(y_true: np.ndarray, y_probs: np.ndarray, threshold: float = 0.5) -> Dict[str, Any]:
+    """
+    Computes the standard metric set for a binary deepfake detector.
+
+    y_true  : int array of labels, 0 = fake, 1 = real
+    y_probs : float array of P(fake) scores
+    """
+    from sklearn.metrics import (
+        accuracy_score, precision_recall_fscore_support,
+        roc_curve, auc, brier_score_loss, confusion_matrix,
+    )
+
+    y_true = np.asarray(y_true)
+    y_probs = np.asarray(y_probs, dtype=float)
+
+    # Decision rule: high P(fake) -> predict FAKE (label 0).
+    y_pred = np.where(y_probs >= threshold, config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX)
+
+    acc = float(accuracy_score(y_true, y_pred))
+    p, r, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="binary", pos_label=config.FAKE_LABEL_IDX, zero_division=0
+    )
+    fpr, tpr, _ = roc_curve(y_true, y_probs, pos_label=config.FAKE_LABEL_IDX)
+    auc_val = float(auc(fpr, tpr))
+    is_fake = (y_true == config.FAKE_LABEL_IDX).astype(float)
+    brier = float(brier_score_loss(is_fake, y_probs))
+    cm = confusion_matrix(y_true, y_pred, labels=[config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX]).tolist()
+
+    return {
+        "accuracy":   acc,
+        "precision":  float(p),
+        "recall":     float(r),
+        "f1_score":   float(f1),
+        "roc_auc":    auc_val,
+        "brier_score": brier,
+        "confusion_matrix": cm,
+    }
 
 
 # ── Single-model timm evaluator ─────────────────────────────────────────────
@@ -110,10 +203,6 @@ def evaluate_timm_on_dir(
 
     import timm as _timm
     from torch.utils.data import DataLoader
-    from sklearn.metrics import (
-        accuracy_score, precision_recall_fscore_support,
-        roc_auc_score, brier_score_loss, confusion_matrix,
-    )
     from training.dataset import DeepfakeDataset
     from training.train_timm import get_timm_transforms
 
@@ -126,7 +215,7 @@ def evaluate_timm_on_dir(
 
     transform = get_timm_transforms(model, is_training=False)
     dataset   = DeepfakeDataset(eval_path, transform=transform)
-    loader    = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=(device.type == "cuda"))
+    loader    = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=(device.type == "cuda"))
 
     y_true, y_probs_all = [], []
     softmax = torch.nn.Softmax(dim=1)
@@ -138,29 +227,10 @@ def evaluate_timm_on_dir(
             y_true.extend(labels.cpu().numpy().tolist())
             y_probs_all.extend(probs[:, config.FAKE_LABEL_IDX].cpu().numpy().tolist())
 
-    y_true  = np.array(y_true)
-    y_probs = np.array(y_probs_all)
-    y_pred  = (y_probs >= 0.5).astype(int)
-
-    acc    = float(accuracy_score(y_true, y_pred))
-    p, r, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="binary", pos_label=config.FAKE_LABEL_IDX, zero_division=0
-    )
-    auc    = float(roc_auc_score(y_true, y_probs))
-    brier  = float(brier_score_loss(y_true == config.FAKE_LABEL_IDX, y_probs))
-    cm     = confusion_matrix(y_true, y_pred, labels=[config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX]).tolist()
-
-    return {
-        "accuracy":   acc,
-        "precision":  float(p),
-        "recall":     float(r),
-        "f1_score":   float(f1),
-        "roc_auc":    auc,
-        "brier_score": brier,
-        "confusion_matrix": cm,
-        "n_real":     n_real,
-        "n_fake":     n_fake,
-    }
+    res = _compute_metrics(np.array(y_true), np.array(y_probs_all))
+    res["n_real"] = n_real
+    res["n_fake"] = n_fake
+    return res
 
 
 def evaluate_yolo_on_dir(
@@ -186,10 +256,6 @@ def evaluate_yolo_on_dir(
         return None
 
     from ultralytics import YOLO
-    from sklearn.metrics import (
-        accuracy_score, precision_recall_fscore_support,
-        roc_auc_score, brier_score_loss, confusion_matrix,
-    )
     from pathlib import Path as _Path
 
     yolo = YOLO(str(checkpoint))
@@ -223,29 +289,10 @@ def evaluate_yolo_on_dir(
         y_probs_all.append(float(probs[fake_idx]))
         y_true.append(true_lbl)
 
-    y_true  = np.array(y_true)
-    y_probs = np.array(y_probs_all)
-    y_pred  = (y_probs >= 0.5).astype(int)
-
-    acc    = float(accuracy_score(y_true, y_pred))
-    p, r, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="binary", pos_label=config.FAKE_LABEL_IDX, zero_division=0
-    )
-    auc    = float(roc_auc_score(y_true, y_probs))
-    brier  = float(brier_score_loss(y_true == config.FAKE_LABEL_IDX, y_probs))
-    cm     = confusion_matrix(y_true, y_pred, labels=[config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX]).tolist()
-
-    return {
-        "accuracy":   acc,
-        "precision":  float(p),
-        "recall":     float(r),
-        "f1_score":   float(f1),
-        "roc_auc":    auc,
-        "brier_score": brier,
-        "confusion_matrix": cm,
-        "n_real":     n_real,
-        "n_fake":     n_fake,
-    }
+    res = _compute_metrics(np.array(y_true), np.array(y_probs_all))
+    res["n_real"] = n_real
+    res["n_fake"] = n_fake
+    return res
 
 
 # ── Soft-voting ensemble evaluator ─────────────────────────────────────────
@@ -262,10 +309,6 @@ def evaluate_ensemble_on_dir(
     """Soft-voting ensemble over (YOLO, ConvNeXt, EfficientNet)."""
     import timm as _timm
     from torch.utils.data import DataLoader
-    from sklearn.metrics import (
-        accuracy_score, precision_recall_fscore_support,
-        roc_auc_score, brier_score_loss, confusion_matrix,
-    )
     from training.dataset import DeepfakeDataset
     from training.train_timm import get_timm_transforms
 
@@ -290,7 +333,7 @@ def evaluate_ensemble_on_dir(
         m.eval()
         tf = get_timm_transforms(m, is_training=False)
         ds = DeepfakeDataset(eval_path, transform=tf)
-        dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=2)
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0)
         probs_list, labels_list = [], []
         softmax = torch.nn.Softmax(dim=1)
         with torch.no_grad():
@@ -323,27 +366,22 @@ def evaluate_ensemble_on_dir(
     if not model_probs or ground_truth is None:
         return None
 
-    # Weighted average
-    w = np.array(weights, dtype=np.float32) / sum(weights)
-    prob_arrays = list(model_probs.values())
-    if len(prob_arrays) < 3:
-        w = np.ones(len(prob_arrays), dtype=np.float32) / len(prob_arrays)
-    ensemble_probs = sum(wi * pa for wi, pa in zip(w, prob_arrays))
-
-    y_pred = (ensemble_probs >= 0.5).astype(int)
-    acc    = float(accuracy_score(ground_truth, y_pred))
-    p_sc, r_sc, f1, _ = precision_recall_fscore_support(
-        ground_truth, y_pred, average="binary", pos_label=config.FAKE_LABEL_IDX, zero_division=0
-    )
-    auc    = float(roc_auc_score(ground_truth, ensemble_probs))
-    brier  = float(brier_score_loss(ground_truth == config.FAKE_LABEL_IDX, ensemble_probs))
-    cm     = confusion_matrix(ground_truth, y_pred, labels=[config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX]).tolist()
-
-    return {
-        "accuracy":   acc, "precision": float(p_sc), "recall": float(r_sc),
-        "f1_score":   float(f1), "roc_auc": auc, "brier_score": brier,
-        "confusion_matrix": cm,
+    # Weighted average. Weights are applied by MODEL KEY (not by dict
+    # insertion order) so the mapping stays correct if the model set changes.
+    weight_by_key = {
+        "YOLO26n-cls":      weights[0],
+        "ConvNeXt-Tiny":    weights[1],
+        "EfficientNet-B3":  weights[2],
     }
+    used = [(weight_by_key.get(k, 0.0), v) for k, v in model_probs.items()]
+    total_w = sum(w for w, _ in used)
+    if total_w <= 0:
+        used = [(1.0, v) for _, v in used]
+        total_w = float(len(used))
+    ensemble_probs = sum((w / total_w) * pa for w, pa in used)
+
+    res = _compute_metrics(ground_truth, ensemble_probs)
+    return res
 
 
 # ── Reporting ───────────────────────────────────────────────────────────────
@@ -354,18 +392,39 @@ def _fmt(val: Optional[float], pct: bool = False) -> str:
     return f"{val*100:.1f}%" if pct else f"{val:.4f}"
 
 
-def build_markdown_table(results: Dict) -> str:
+def build_markdown_table(results: Dict, domain_note: Optional[Dict[str, bool]] = None) -> str:
     """
     results[train_ds][test_ds][model_key] = metrics_dict | None
+
+    domain_note maps train_ds -> True when that domain has its own checkpoint.
+    Rows without a domain-specific checkpoint are labelled explicitly, because
+    re-labelling the same shared weights under two "Trained on" headings would
+    misrepresent the experiment.
     """
     MODEL_ORDER = ["EfficientNet-B3", "ConvNeXt-Tiny", "YOLO26n-cls", "Ensemble"]
     TRAIN_ORDER = ["celebdf", "dfdc"]
     TEST_ORDER  = list(TEST_DATASETS.keys())
+    domain_note = domain_note or {}
 
     lines = [
         "# Cross-Dataset Evaluation Table",
         "",
         "> Metric shown: **ROC-AUC** (F1 | Brier) — in-domain cells are highlighted with ⬛.",
+        "> ROC-AUC is computed with **FAKE as the positive class**; 0.5 = chance.",
+    ]
+
+    shared_domains = [d for d in TRAIN_ORDER if not domain_note.get(d, True)]
+    if shared_domains:
+        lines += [
+            "",
+            "> ⚠️ **Shared-checkpoint rows:** "
+            + ", ".join(f"**{d.upper()}**" for d in shared_domains)
+            + " has no domain-specific checkpoint (no `models/checkpoints/<domain>/` entry), "
+              "so the shared/global checkpoint is used. These rows are **not** independent "
+              "cross-domain results — train a per-domain model before claiming "
+              "cross-dataset generalisation.",
+        ]
+    lines += [
         "",
         "| Trained on | Test dataset | Model | Accuracy | F1 | ROC-AUC | Brier |",
         "|---|---|---|---|---|---|---|",
@@ -378,6 +437,8 @@ def build_markdown_table(results: Dict) -> str:
                 (train_ds == "dfdc"    and test_name == "DFDC")
             )
             tag = "⬛ in-domain" if is_indomain else "↗ cross"
+            if not domain_note.get(train_ds, True):
+                tag = "⚠ shared ckpt"
             first = True
             for model_key in MODEL_ORDER:
                 m = (results.get(train_ds) or {}).get(test_name) or {}
@@ -393,6 +454,61 @@ def build_markdown_table(results: Dict) -> str:
         lines.append("|---|---|---|---|---|---|---|")
 
     return "\n".join(lines)
+
+
+def export_csv_table(results: Dict, target_paths: List[Path],
+                     domain_note: Optional[Dict[str, bool]] = None):
+    """
+    Exports structured metrics to CSV files.
+
+    Every model is emitted, including those with no metrics (as empty cells),
+    so the table never silently drops a backbone. Rows are annotated with
+    whether a domain-specific checkpoint was used.
+    """
+    import csv
+    MODEL_ORDER = ["EfficientNet-B3", "ConvNeXt-Tiny", "YOLO26n-cls", "Ensemble"]
+    TRAIN_ORDER = ["celebdf", "dfdc"]
+    TEST_ORDER  = list(TEST_DATASETS.keys())
+    domain_note = domain_note or {}
+
+    rows = []
+    for train_ds in TRAIN_ORDER:
+        for test_name in TEST_ORDER:
+            for model_key in MODEL_ORDER:
+                m = (results.get(train_ds) or {}).get(test_name) or {}
+                mets = m.get(model_key)
+                if not mets:
+                    rows.append({
+                        "Trained on": train_ds.upper(),
+                        "Test dataset": test_name,
+                        "Model": model_key,
+                        "Checkpoint": "domain-specific" if domain_note.get(train_ds, True) else "shared (no per-domain ckpt)",
+                        "Accuracy (%)": "",
+                        "F1-Score (%)": "",
+                        "ROC-AUC": "",
+                        "Brier Score": ""
+                    })
+                    continue
+                rows.append({
+                    "Trained on": train_ds.upper(),
+                    "Test dataset": test_name,
+                    "Model": model_key,
+                    "Checkpoint": "domain-specific" if domain_note.get(train_ds, True) else "shared (no per-domain ckpt)",
+                    "Accuracy (%)": f"{mets.get('accuracy', 0)*100:.2f}",
+                    "F1-Score (%)": f"{mets.get('f1_score', 0)*100:.2f}",
+                    "ROC-AUC": f"{mets.get('roc_auc', 0):.4f}",
+                    "Brier Score": f"{mets.get('brier_score', 0):.4f}"
+                })
+    if not rows:
+        return
+    for path in target_paths:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        logger.info(f"Saved CSV table: {path}")
 
 
 def save_heatmap(results: Dict, save_path: Path):
@@ -480,6 +596,10 @@ def run_cross_table(args):
     # results[train_ds][test_name][model_key] = metrics_dict | None
     results: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
+    # train_ds -> True when that domain has its own checkpoint (genuine
+    # cross-domain row), False when a shared checkpoint was substituted.
+    domain_note: Dict[str, bool] = {}
+
     timm_meta = {
         "EfficientNet-B3": "efficientnet_b3.ra2_in1k",
         "ConvNeXt-Tiny":   "convnext_tiny.fb_in22k_ft_in1k",
@@ -491,13 +611,30 @@ def run_cross_table(args):
         logger.info(f"  TRAIN DOMAIN: {train_ds.upper()}")
         logger.info(f"{'='*70}")
 
+        # Resolve checkpoints once per domain so we can report honestly
+        # whether this row is a genuine cross-domain experiment.
+        ckpts = {dn: _timm_checkpoint(train_ds, mn) for dn, mn in timm_meta.items()}
+        yolo_ckpt, yolo_is_domain = _yolo_checkpoint(train_ds)
+        all_domain_specific = all(flag for _, flag in ckpts.values()) and yolo_is_domain
+
+        if not all_domain_specific:
+            missing = [dn for dn, (_, flag) in ckpts.items() if not flag]
+            if not yolo_is_domain:
+                missing.append("YOLO26n-cls")
+            logger.warning(
+                f"  No domain-specific checkpoint for '{train_ds}' (missing: {', '.join(missing)}). "
+                "Falling back to the shared/global checkpoint - this row is NOT a genuine "
+                "cross-domain result and will be labelled accordingly."
+            )
+        domain_note[train_ds] = all_domain_specific
+
         for test_name, test_base_dir in TEST_DATASETS.items():
             results[train_ds][test_name] = {}
             logger.info(f"\n  → Evaluating on [{test_name}]  ({test_base_dir})")
 
             # timm models
             for disp_name, model_name in timm_meta.items():
-                ckpt = _timm_checkpoint(train_ds, model_name)
+                ckpt, _ = ckpts[disp_name]
                 logger.info(f"    {disp_name}: {ckpt}")
                 try:
                     m = evaluate_timm_on_dir(model_name, ckpt, test_base_dir,
@@ -510,7 +647,6 @@ def run_cross_table(args):
                     results[train_ds][test_name][disp_name] = None
 
             # YOLO
-            yolo_ckpt = _yolo_checkpoint(train_ds)
             logger.info(f"    YOLO26n-cls: {yolo_ckpt}")
             try:
                 m = evaluate_yolo_on_dir(yolo_ckpt, test_base_dir,
@@ -518,6 +654,8 @@ def run_cross_table(args):
                 results[train_ds][test_name]["YOLO26n-cls"] = m
                 if m:
                     logger.info(f"      AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
+                else:
+                    logger.warning("      YOLO26n-cls: no metrics produced (checkpoint missing or no samples)")
             except Exception as exc:
                 logger.error(f"    YOLO failed: {exc}\n{traceback.format_exc()}")
                 results[train_ds][test_name]["YOLO26n-cls"] = None
@@ -525,7 +663,7 @@ def run_cross_table(args):
             # Ensemble
             logger.info(f"    Soft-Voting Ensemble…")
             try:
-                timm_ckpts = {dn: _timm_checkpoint(train_ds, mn) for dn, mn in timm_meta.items()}
+                timm_ckpts = {dn: path for dn, (path, _) in ckpts.items()}
                 m = evaluate_ensemble_on_dir(
                     timm_ckpts, timm_meta, yolo_ckpt, test_base_dir,
                     weights=(1.0, 1.0, 1.0), batch_size=args.batch_size, device=device
@@ -544,9 +682,13 @@ def run_cross_table(args):
     logger.info(f"\nSaved JSON: {json_path}")
 
     md_path = OUT_DIR / "cross_table.md"
-    md = build_markdown_table(results)
+    md = build_markdown_table(results, domain_note)
     md_path.write_text(md, encoding="utf-8")
     logger.info(f"Saved Markdown table: {md_path}")
+
+    csv_path = OUT_DIR / "cross_table.csv"
+    root_csv_path = config.REPORTS_DIR / "cross_dataset_table.csv"
+    export_csv_table(results, [csv_path, root_csv_path], domain_note)
 
     save_heatmap(results, OUT_DIR / "cross_table_heatmap.png")
     save_bar_chart(results, OUT_DIR / "per_model_bars.png")
