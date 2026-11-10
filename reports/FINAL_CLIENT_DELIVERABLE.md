@@ -26,30 +26,30 @@
 
 | Trained on | Test dataset | Model | Checkpoint | Accuracy (%) | F1-Score (%) | ROC-AUC | Brier Score |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CELEBDF | CelebDF | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.8150 | 0.2889 |
-| CELEBDF | CelebDF | ConvNeXt-Tiny | shared (no per-domain ckpt) | 50.00 | 66.67 | 0.2975 | 0.3809 |
-| CELEBDF | CelebDF | YOLO26n-cls | shared (no per-domain ckpt) | 57.50 | 70.18 | 0.7650 | 0.2373 |
-| CELEBDF | CelebDF | Ensemble | shared (no per-domain ckpt) | 22.50 | 27.91 | 0.1100 | 0.2967 |
-| CELEBDF | DFDC | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.5675 | 0.2893 |
-| CELEBDF | DFDC | ConvNeXt-Tiny | shared (no per-domain ckpt) | 50.00 | 66.07 | 0.5284 | 0.2706 |
-| CELEBDF | DFDC | YOLO26n-cls | shared (no per-domain ckpt) | 52.63 | 64.00 | 0.4453 | 0.2827 |
-| CELEBDF | DFDC | Ensemble | shared (no per-domain ckpt) | 51.32 | 59.34 | 0.5291 | 0.2513 |
-| CELEBDF | Real-Life | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.2571 | 0.2896 |
-| CELEBDF | Real-Life | ConvNeXt-Tiny | shared (no per-domain ckpt) | 34.00 | 48.70 | 0.2574 | 0.3276 |
-| CELEBDF | Real-Life | YOLO26n-cls | shared (no per-domain ckpt) | 31.50 | 46.55 | 0.0693 | 0.3938 |
-| CELEBDF | Real-Life | Ensemble | shared (no per-domain ckpt) | 68.75 | 70.50 | 0.7283 | 0.2354 |
-| DFDC | CelebDF | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.8150 | 0.2889 |
-| DFDC | CelebDF | ConvNeXt-Tiny | shared (no per-domain ckpt) | 50.00 | 66.67 | 0.2975 | 0.3809 |
-| DFDC | CelebDF | YOLO26n-cls | shared (no per-domain ckpt) | 57.50 | 70.18 | 0.7650 | 0.2373 |
-| DFDC | CelebDF | Ensemble | shared (no per-domain ckpt) | 22.50 | 27.91 | 0.1100 | 0.2967 |
-| DFDC | DFDC | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.5675 | 0.2893 |
-| DFDC | DFDC | ConvNeXt-Tiny | shared (no per-domain ckpt) | 50.00 | 66.07 | 0.5284 | 0.2706 |
-| DFDC | DFDC | YOLO26n-cls | shared (no per-domain ckpt) | 52.63 | 64.00 | 0.4453 | 0.2827 |
-| DFDC | DFDC | Ensemble | shared (no per-domain ckpt) | 51.32 | 59.34 | 0.5291 | 0.2513 |
-| DFDC | Real-Life | EfficientNet-B3 | shared (no per-domain ckpt) | 50.00 | 0.00 | 0.2571 | 0.2896 |
-| DFDC | Real-Life | ConvNeXt-Tiny | shared (no per-domain ckpt) | 34.00 | 48.70 | 0.2574 | 0.3276 |
-| DFDC | Real-Life | YOLO26n-cls | shared (no per-domain ckpt) | 31.50 | 46.55 | 0.0693 | 0.3938 |
-| DFDC | Real-Life | Ensemble | shared (no per-domain ckpt) | 68.75 | 70.50 | 0.7283 | 0.2354 |
+| CELEBDF | CelebDF | EfficientNet-B3 | domain-specific | 57.50 | 48.48 | 0.6700 | 0.3553 |
+| CELEBDF | CelebDF | ConvNeXt-Tiny | domain-specific | 60.00 | 71.43 | 0.7625 | 0.3252 |
+| CELEBDF | CelebDF | YOLO26n-cls | domain-specific | 50.00 | 9.09 | 0.6125 | 0.4180 |
+| CELEBDF | CelebDF | Ensemble | domain-specific | 60.00 | 55.56 | 0.7175 | 0.2208 |
+| CELEBDF | DFDC | EfficientNet-B3 | domain-specific | 47.37 | 51.22 | 0.5305 | 0.4094 |
+| CELEBDF | DFDC | ConvNeXt-Tiny | domain-specific | 48.68 | 64.22 | 0.5298 | 0.3514 |
+| CELEBDF | DFDC | YOLO26n-cls | domain-specific | 56.58 | 23.26 | 0.5956 | 0.3897 |
+| CELEBDF | DFDC | Ensemble | domain-specific | 56.58 | 54.79 | 0.5686 | 0.2583 |
+| CELEBDF | Real-Life | EfficientNet-B3 | domain-specific | 41.75 | 5.92 | 0.3481 | 0.5522 |
+| CELEBDF | Real-Life | ConvNeXt-Tiny | domain-specific | 32.92 | 21.31 | 0.2738 | 0.5243 |
+| CELEBDF | Real-Life | YOLO26n-cls | domain-specific | 48.33 | 1.27 | 0.2189 | 0.5117 |
+| CELEBDF | Real-Life | Ensemble | domain-specific | 44.33 | 4.02 | 0.2430 | 0.4702 |
+| DFDC | CelebDF | EfficientNet-B3 | domain-specific | 82.50 | 83.72 | 0.8475 | 0.1657 |
+| DFDC | CelebDF | ConvNeXt-Tiny | domain-specific | 75.00 | 80.00 | 0.9100 | 0.1665 |
+| DFDC | CelebDF | YOLO26n-cls | domain-specific | 95.00 | 95.00 | 0.9925 | 0.0536 |
+| DFDC | CelebDF | Ensemble | domain-specific | 90.00 | 90.48 | 0.9825 | 0.0921 |
+| DFDC | DFDC | EfficientNet-B3 | domain-specific | 61.84 | 64.20 | 0.7188 | 0.3270 |
+| DFDC | DFDC | ConvNeXt-Tiny | domain-specific | 61.84 | 50.85 | 0.7368 | 0.1951 |
+| DFDC | DFDC | YOLO26n-cls | domain-specific | 72.37 | 66.67 | 0.8331 | 0.1687 |
+| DFDC | DFDC | Ensemble | domain-specific | 60.53 | 62.50 | 0.7860 | 0.1888 |
+| DFDC | Real-Life | EfficientNet-B3 | domain-specific | 62.42 | 61.94 | 0.6620 | 0.3056 |
+| DFDC | Real-Life | ConvNeXt-Tiny | domain-specific | 48.00 | 26.93 | 0.4585 | 0.2934 |
+| DFDC | Real-Life | YOLO26n-cls | domain-specific | 47.33 | 3.66 | 0.3874 | 0.4786 |
+| DFDC | Real-Life | Ensemble | domain-specific | 49.92 | 19.11 | 0.5888 | 0.2850 |
 
 > **Note on cross-dataset generalisation**: ROC-AUC in this report is computed with **FAKE as the
 > positive class**, so a value of 0.5 is chance and higher is better. In published deepfake
@@ -95,9 +95,8 @@
 No sentence is hand-written, so this section cannot drift away from the results.*
 
 - **Constant-prediction collapse.** The evaluated checkpoint predicts *real* for every image in the test set (accuracy 0.5000, ROC-AUC 0.4834). This is a degenerate decision boundary, not a usable detector.
-- **Across the cross-dataset matrix** (Table 2), the strongest ROC-AUC is 0.8150 (EfficientNet-B3 on CelebDF), and the weakest is 0.0693 (YOLO26n-cls on Real-Life).
-- 4 of 24 cells sit within ±0.05 of the 0.50 chance line, indicating that the underlying weights are not yet discriminating between authentic and manipulated faces.
-- ⚠️ **Train-domain caveat.** The rows labelled **CELEBDF**, **DFDC** in Table 2 were produced with the shared/global checkpoint, because no domain-specific checkpoint exists for them. Those rows are **not** independent cross-domain measurements; a per-domain model must be trained before any cross-dataset generalisation claim is valid.
+- **Across the cross-dataset matrix** (Table 2), the strongest ROC-AUC is 0.9925 (YOLO26n-cls on CelebDF), and the weakest is 0.2189 (YOLO26n-cls on Real-Life).
+- 3 of 24 cells sit within ±0.05 of the 0.50 chance line, indicating that the underlying weights are not yet discriminating between authentic and manipulated faces.
 
 ---
 
