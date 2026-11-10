@@ -1,5 +1,5 @@
 {
-  "id": "mradulmanimishra/deepfake-celebdf-gpu",
+  "id": "mradulmanimishra/deepfake-celebdf-gpu-training",
   "title": "Deepfake CelebDF GPU Training",
   "code_file": "kaggle_celebdf_train.ipynb",
   "language": "python",
