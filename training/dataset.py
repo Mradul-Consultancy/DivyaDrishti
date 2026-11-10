@@ -20,10 +20,12 @@ class DeepfakeDataset(Dataset):
         self,
         root_dir: Path | str,
         transform: Optional[Callable] = None,
-        class_to_idx: Optional[dict] = None
+        class_to_idx: Optional[dict] = None,
+        return_path: bool = False
     ):
         self.root_dir = Path(root_dir)
         self.transform = transform
+        self.return_path = return_path
 
         if class_to_idx is not None:
             self.class_to_idx = class_to_idx
@@ -57,7 +59,7 @@ class DeepfakeDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int, Path]:
+    def __getitem__(self, idx: int):
         img_path, label = self.samples[idx]
 
         try:
@@ -70,7 +72,9 @@ class DeepfakeDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, label, img_path
+        if self.return_path:
+            return image, label, str(img_path)
+        return image, label
 
     def get_class_counts(self) -> dict:
         """Returns the distribution of samples per class."""

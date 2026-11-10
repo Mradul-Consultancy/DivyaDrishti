@@ -93,7 +93,7 @@ def evaluate_model(args):
     
     # Load dataset with path information
     test_transform = get_val_transforms()
-    test_dataset = DeepfakeDataset(test_dir, transform=test_transform)
+    test_dataset = DeepfakeDataset(test_dir, transform=test_transform, return_path=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     # Prepare logger
@@ -169,8 +169,15 @@ def evaluate_model(args):
     logger.info(f"Saved ROC curve plot: {roc_path}")
 
     # Save CSV of predictions
+    #
+    # NOTE: this is the SINGLE-model schema (one prob_fake column). The
+    # multi-model ensemble schema (yolo_prob_fake, convnext_prob_fake, ...)
+    # is owned by evaluation/evaluate_ensemble.py and lives at
+    # reports/saved_predictions.csv. Writing both to the same path made the
+    # two scripts overwrite each other depending on run order, which broke
+    # evaluation/generate_reports.py and tests/test_calibration.py.
     import csv
-    csv_path = Path(args.reports_dir) / "saved_predictions.csv"
+    csv_path = Path(args.reports_dir) / "saved_predictions_single.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=["image_path", "video_id", "true_label", "predicted_label", "prob_fake", "prob_real"])
         writer.writeheader()

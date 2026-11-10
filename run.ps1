@@ -3,11 +3,11 @@
 # No GNU Make required.
 
 param(
-    [ValidateSet('pilot','full','reports','real','deliver','clean','test','help')]
+    [ValidateSet('pilot', 'full', 'reports', 'real', 'deliver', 'clean', 'test', 'help')]
     [string]$target = 'help',
-    [int]$MaxVideos   = 200,
-    [int]$FullEpochs  = 25,
-    [string]$Env      = 'LOCAL',
+    [int]$MaxVideos = 200,
+    [int]$FullEpochs = 25,
+    [string]$Env = 'LOCAL',
     [float]$QualityGate = 0.70
 )
 
@@ -65,7 +65,7 @@ function Run-Pilot {
 }
 
 function Run-Full {
-    Write-Host "`n=== Full run: training all models (Manual step, no auto-cascade) ===" -ForegroundColor Cyan
+    Write-Host "`n=== Full run: training all models [Manual step, no auto-cascade] ===" -ForegroundColor Cyan
     papermill notebooks/kaggle_pilot.ipynb full_run.ipynb `
         -p MAX_VIDEOS "None" `
         -p epochs $FullEpochs `
@@ -106,13 +106,13 @@ function Run-Clean {
 }
 
 switch ($target) {
-    'test'    { Run-Test    }
-    'pilot'   { Run-Pilot   }
-    'full'    { Run-Full    }
+    'test' { Run-Test }
+    'pilot' { Run-Pilot }
+    'full' { Run-Full }
     'reports' { Run-Reports }
-    'real'    { Run-Real    }
+    'real' { Run-Real }
     'deliver' { Run-Deliver }
-    'clean'   { Run-Clean   }
-    'help'    { Show-Help   }
+    'clean' { Run-Clean }
+    'help' { Show-Help }
 }
 

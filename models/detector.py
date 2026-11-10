@@ -113,8 +113,12 @@ def get_model(model_name: str = "resnet18", num_classes: int = 2, pretrained: bo
         return model
 
     else:
-        raise ValueError(
-            f"Unsupported model architecture: '{model_name}'. "
-            f"Choose from ['mesonet', 'resnet18', 'resnet50', 'efficientnet_b0']"
-        )
+        try:
+            import timm
+            return timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+        except Exception as exc:
+            raise ValueError(
+                f"Unsupported model architecture: '{model_name}'. "
+                f"Choose from ['mesonet', 'resnet18', 'resnet50', 'efficientnet_b0'] or valid timm backbone. ({exc})"
+            )
 
