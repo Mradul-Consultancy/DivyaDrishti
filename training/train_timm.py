@@ -34,13 +34,48 @@ from training.dataset import DeepfakeDataset, create_dataloaders
 from training.class_weights import compute_class_weights, log_class_info
 from preprocessing.transforms import RandomJPEGCompression
 
+logger = setup_logger("TrainTimm")
+
+# ImageNet weights vendored for offline environments (no Hub access).
+LOCAL_PRETRAINED_DIR = config.BASE_DIR / "pretrained"
+
 
 def build_timm_model(model_name: str, num_classes: int = 2, pretrained: bool = True) -> nn.Module:
     """
     Creates a timm model with a fresh classification head for binary deepfake detection.
+
+    When ``pretrained`` is True the ImageNet weights are fetched from the
+    timm/HuggingFace Hub. In an offline environment (e.g. the Kaggle
+    sandbox, which has no DNS) that download fails, so a locally vendored
+    copy under ``pretrained/`` is used instead when present.
+
+    If neither source is available the model is built without pretrained
+    weights and a warning is logged - training still runs, just from a
+    random initialisation.
     """
-    model = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
-    return model
+    if not pretrained:
+        return timm.create_model(model_name, pretrained=False, num_classes=num_classes)
+
+    try:
+        return timm.create_model(model_name, pretrained=True, num_classes=num_classes)
+    except Exception as exc:
+        local = LOCAL_PRETRAINED_DIR / f"{model_name}.safetensors"
+        if local.exists():
+            logger.warning(
+                f"Could not fetch '{model_name}' from the Hub ({exc}); "
+                f"using the vendored weights at {local}."
+            )
+            return timm.create_model(
+                model_name,
+                pretrained=True,
+                num_classes=num_classes,
+                pretrained_cfg_overlay=dict(file=str(local)),
+            )
+        logger.warning(
+            f"Could not fetch '{model_name}' from the Hub ({exc}) and no vendored "
+            f"weights were found at {local}. Training from random initialisation."
+        )
+        return timm.create_model(model_name, pretrained=False, num_classes=num_classes)
 
 
 def get_timm_transforms(model: nn.Module, is_training: bool = True,
