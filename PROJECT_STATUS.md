@@ -219,6 +219,42 @@ died on batch 0 and had to be run in a fresh process, where it trained normally.
 subprocess per (dataset, model) rather than looping inside one interpreter,
 so a CUDA-context problem in one backend cannot take down the rest.
 
+### Kaggle Sandbox Profile (measured 2026-11-12)
+
+Probed with a dedicated diagnostic kernel (`deepfake-env-check`). The
+sandbox this account gets is **not** what a GPU-enabled Kaggle session
+normally provides:
+
+| Resource | Kaggle sandbox | Local workstation |
+|---|---|---|
+| GPU | **none** (no `/dev/nvidia*`, `nvidia-smi` absent) | RTX 2050, 4 GB, CUDA 13.0 |
+| CPU | 4 cores | 12 logical cores |
+| RAM | 31 GB (27 GB free) | 11.7 GB total, **0.7 GB free** (page file exhausted) |
+| Disk | 20.9 GB free | local |
+| Internet | **none** (DNS fails for pypi.org, api.kaggle.com, github.com) | available |
+| Python | 3.13.18, torch 2.11.0+cpu | 3.12.10, torch 2.9.1+cu128 |
+| Preinstalled | timm, torchvision, sklearn, cv2, pandas, numpy, PIL, matplotlib, tqdm | all + ultralytics, facenet-pytorch |
+
+**GPU is never granted.** `enable_gpu: true` plus `--accelerator
+NvidiaTeslaT4`, `NvidiaTeslaT4x2`, `NvidiaTeslaP100` and `gpu` were each
+tried; every run produced the same 4-CPU, no-GPU sandbox. The account's
+GPU quota reports 21600 s allowed and 0 s used, so the fallback is
+server-side, not a quota exhaustion.
+
+Two consequences drove real code changes:
+
+1. **Datasets mount at `/kaggle/input/datasets/<owner>/<slug>/`**, not
+   `/kaggle/input/<slug>/`. The notebooks looked in the old path and
+   concluded the dataset was missing. The training kernel now probes both.
+2. **No internet means no `pip install`**, so `ultralytics` and
+   `facenet-pytorch` cannot be installed. Both are now vendored under
+   `vendor/` and shipped in the `deepfake-code` dataset, together with the
+   `yolo26n-cls.pt` pretrained weights.
+
+The Kaggle sandbox is used for training because its 31 GB of RAM is the
+only environment with enough headroom; the local workstation exhausted its
+page file when two training processes ran concurrently.
+
 ---
 
 ## Next Steps for Delivery Readiness
