@@ -21,7 +21,18 @@ import numpy as np
 from PIL import Image
 import cv2
 import torch
-from facenet_pytorch import MTCNN
+
+# MTCNN is optional. It is pulled in by the preprocessing package's
+# __init__, so a hard import here would make EVERY module that touches
+# preprocessing.transforms (including training) fail on machines where
+# facenet-pytorch is not installed - e.g. an offline Kaggle sandbox.
+try:
+    from facenet_pytorch import MTCNN
+    MTCNN_AVAILABLE = True
+except Exception as _mtcnn_import_error:  # pragma: no cover
+    MTCNN = None
+    MTCNN_AVAILABLE = False
+    _MTCNN_IMPORT_ERROR = _mtcnn_import_error
 
 # Add project root to path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -50,7 +61,8 @@ class VideoFaceExtractor:
         logger=None
     ):
         self.frames_per_video = frames_per_video
-        self.image_size = (image_size, image_size)
+        # Accept either an int (square) or an explicit (width, height) tuple.
+        self.image_size = (image_size, image_size) if isinstance(image_size, int) else tuple(image_size)
         self.margin_ratio = margin_ratio
         self.min_face_prob = min_face_prob
         self.keep_all_faces = keep_all_faces
@@ -58,14 +70,31 @@ class VideoFaceExtractor:
         self.device = device or config.DEVICE
         self.logger = logger or setup_logger("VideoFaceExtractor")
 
-        self.logger.info(f"Initializing MTCNN detector on device: {self.device}...")
-        self.mtcnn = MTCNN(
-            image_size=image_size,
-            margin=0,  # Proportional margin applied in crop_faces_mtcnn
-            keep_all=True,
-            post_process=False,
-            device=self.device
-        )
+        if MTCNN_AVAILABLE:
+            self.logger.info(f"Initializing MTCNN detector on device: {self.device}...")
+            self.mtcnn = MTCNN(
+                image_size=image_size,
+                margin=0,  # Proportional margin applied in crop_faces_mtcnn
+                keep_all=True,
+                post_process=False,
+                device=self.device
+            )
+        else:
+            self.logger.warning(
+                f"MTCNN unavailable ({_MTCNN_IMPORT_ERROR}); face detection falls back "
+                "to an OpenCV Haar cascade (when the installed OpenCV provides one) "
+                "with centre-crop fallback."
+            )
+            self.mtcnn = None
+            self._haar = None
+            try:
+                cascade_cls = getattr(cv2, "CascadeClassifier", None)
+                if cascade_cls is not None:
+                    self._haar = cascade_cls(
+                        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Haar cascade unavailable ({e}); centre-crop only.")
 
     def get_video_files(self, directory: Path) -> List[Path]:
         """Finds all valid video files within a directory."""
@@ -127,6 +156,9 @@ class VideoFaceExtractor:
                 cropped_faces: List of cropped face PIL Images (or fallback if enabled).
                 face_detected: True if MTCNN detected >= 1 face meeting min_face_prob, False otherwise.
         """
+        if self.mtcnn is None:
+            return self._crop_faces_haar(pil_img)
+
         try:
             boxes, probs = self.mtcnn.detect(pil_img)
         except Exception as e:
@@ -169,6 +201,55 @@ class VideoFaceExtractor:
                     cropped_faces.append(face_crop)
 
         # Fallback to center crop if enabled
+        if len(cropped_faces) == 0 and self.fallback_center_crop:
+            min_dim = min(img_w, img_h)
+            left = (img_w - min_dim) // 2
+            top = (img_h - min_dim) // 2
+            fallback = pil_img.crop((left, top, left + min_dim, top + min_dim))
+            fallback = fallback.resize(self.image_size, Image.Resampling.LANCZOS)
+            cropped_faces.append(fallback)
+
+        return cropped_faces, face_detected
+
+    def _crop_faces_haar(self, pil_img: Image.Image) -> Tuple[List[Image.Image], bool]:
+        """
+        Face cropping without MTCNN.
+
+        Prefers an OpenCV Haar cascade when the installed OpenCV still ships
+        one (OpenCV 5 removed ``CascadeClassifier`` from the main module and
+        no longer bundles the cascade XML files), and otherwise falls back to a
+        plain centre crop. Lower quality than MTCNN, but it keeps the
+        extraction pipeline functional instead of failing outright.
+        """
+        cropped_faces: List[Image.Image] = []
+        face_detected = False
+        img_w, img_h = pil_img.size
+
+        cascade = getattr(self, "_haar", None)
+        if cascade is not None:
+            try:
+                rgb = np.array(pil_img)
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+                faces = cascade.detectMultiScale(gray, 1.1, 4, minSize=(80, 80))
+            except Exception as e:
+                self.logger.debug(f"Haar detection error: {e}")
+                faces = []
+
+            for (x, y, w, h) in faces:
+                pad = int(self.margin_ratio * max(w, h))
+                cx1 = max(0, x - pad)
+                cy1 = max(0, y - pad)
+                cx2 = min(img_w, x + w + pad)
+                cy2 = min(img_h, y + h + pad)
+                crop = pil_img.crop((cx1, cy1, cx2, cy2)).resize(
+                    self.image_size, Image.Resampling.LANCZOS
+                )
+                cropped_faces.append(crop)
+                face_detected = True
+                if not self.keep_all_faces:
+                    break
+
         if len(cropped_faces) == 0 and self.fallback_center_crop:
             min_dim = min(img_w, img_h)
             left = (img_w - min_dim) // 2

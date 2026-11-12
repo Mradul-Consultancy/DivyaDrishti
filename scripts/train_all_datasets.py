@@ -30,6 +30,7 @@ import sys
 import types
 import argparse
 import traceback
+import subprocess
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -174,6 +175,41 @@ def train_yolo_model(dataset: str, data_dir: Path, args):
 
 # ── Orchestrator ───────────────────────────────────────────────────────────
 
+def _train_one_in_subprocess(dataset: str, model_name: str, args) -> bool:
+    """
+    Trains a single (dataset, model) pair in a fresh subprocess.
+
+    Isolating each run in its own interpreter matters on CUDA: running
+    Ultralytics YOLO and then timm in the same process can leave the CUDA
+    context in a state where the next model's first batch aborts the whole
+    interpreter with a native error (0xC0000409). One process per model
+    means such a failure is contained to that model.
+    """
+    cmd = [
+        sys.executable, "-m", "scripts.train_all_datasets",
+        "--worker-dataset", dataset,
+        "--worker-model", model_name,
+        "--epochs", str(args.epochs),
+        "--batch-size", str(args.batch_size),
+        "--patience", str(args.patience),
+    ]
+    if getattr(args, "num_workers", None):
+        cmd += ["--num-workers", str(args.num_workers)]
+    if getattr(args, "force", False):
+        cmd.append("--force")
+
+    logger.info(f"[RUN] {dataset} / {model_name} (subprocess)")
+    try:
+        proc = subprocess.run(cmd, cwd=str(config.BASE_DIR))
+        ok = proc.returncode == 0
+    except Exception as exc:
+        logger.error(f"[FAIL] {dataset} / {model_name}: {exc}")
+        return False
+    if not ok:
+        logger.error(f"[FAIL] {dataset} / {model_name} exited with code {proc.returncode}")
+    return ok
+
+
 def run_all(args):
     datasets = args.datasets if args.datasets else list(DATASET_DIRS.keys())
     results  = {}   # (dataset, model) -> bool
@@ -196,13 +232,11 @@ def run_all(args):
 
         # timm models
         for model_name in TIMM_MODELS:
-            ok = train_timm_model(model_name, dataset, data_dir, args)
-            results[(dataset, model_name)] = ok
+            results[(dataset, model_name)] = _train_one_in_subprocess(dataset, model_name, args)
 
         # YOLO
         if not args.skip_yolo:
-            ok = train_yolo_model(dataset, data_dir, args)
-            results[(dataset, "yolo26n-cls")] = ok
+            results[(dataset, "yolo26n-cls")] = _train_one_in_subprocess(dataset, "yolo26n-cls", args)
 
     # ── Summary ────────────────────────────────────────────────────────────
     print("\n" + "=" * 65)
@@ -239,6 +273,12 @@ def main():
     parser.add_argument("--pilot",      action="store_true",     help="Shortcut: set --epochs 5 --patience 3")
     parser.add_argument("--skip-yolo",  action="store_true",     help="Skip YOLO training (timm only)")
     parser.add_argument("--force",      action="store_true",     help="Re-train even if checkpoint exists")
+    parser.add_argument("--num-workers", type=int,  default=None,
+                        help="DataLoader workers (default: config.NUM_WORKERS)")
+    parser.add_argument("--worker-dataset", type=str, default=None,
+                        help=argparse.SUPPRESS)  # internal: train a single model in this process
+    parser.add_argument("--worker-model",   type=str, default=None,
+                        help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -246,6 +286,21 @@ def main():
         args.epochs   = 5
         args.patience = 3
         logger.info("Pilot mode: 5 epochs, patience 3.")
+
+    # Worker mode: train exactly one (dataset, model) pair and exit. The
+    # orchestrator spawns one subprocess per pair so that a CUDA-context
+    # problem in one backend (e.g. Ultralytics YOLO) cannot abort the
+    # models that follow it.
+    if args.worker_dataset and args.worker_model:
+        data_dir = DATASET_DIRS.get(args.worker_dataset)
+        if data_dir is None:
+            logger.error(f"Unknown dataset '{args.worker_dataset}'")
+            sys.exit(2)
+        if args.worker_model == "yolo26n-cls":
+            ok = train_yolo_model(args.worker_dataset, data_dir, args)
+        else:
+            ok = train_timm_model(args.worker_model, args.worker_dataset, data_dir, args)
+        sys.exit(0 if ok else 1)
 
     run_all(args)
 

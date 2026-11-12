@@ -34,10 +34,12 @@ TEST_DIR = PROCESSED_DATA_DIR / "test"
 # Image and Model Settings
 IMAGE_SIZE = (224, 224)  # (Height, Width) for standard CNN backbones
 BATCH_SIZE = 32
-# DataLoader workers. JPEG decode + heavy augmentation is the bottleneck for
+# DataLoader workers. JPEG decode + augmentation is the bottleneck for
 # GPU training, so this should be scaled with the host's core count rather
-# than left at 2 (which leaves a GPU idle waiting for data).
-NUM_WORKERS = min(8, max(2, (os.cpu_count() or 4) - 1))
+# than left at 2 (which leaves a GPU idle waiting for data). Capped at 4:
+# each worker holds a decoded-image buffer, and too many of them exhaust
+# the Windows page file on a modest RAM machine.
+NUM_WORKERS = min(4, max(2, (os.cpu_count() or 4) - 1))
 NUM_CLASSES = 2
 
 # Standard PyTorch ImageFolder and Ultralytics YOLO sort directories alphabetically:
