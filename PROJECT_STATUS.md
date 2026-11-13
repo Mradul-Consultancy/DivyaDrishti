@@ -255,6 +255,36 @@ The Kaggle sandbox is used for training because its 31 GB of RAM is the
 only environment with enough headroom; the local workstation exhausted its
 page file when two training processes ran concurrently.
 
+### Kaggle Execution Path (final, 2026-11-13)
+
+Training now runs on Kaggle. The working setup:
+
+| Asset | Kaggle id | Contents |
+|---|---|---|
+| Code | `mradulmanimishra/deepfake-code` | repository + vendored `ultralytics`, `facenet_pytorch`, `yolo26n-cls.pt` |
+| Face crops | `mradulmanimishra/deepfake-crops-v2` | 17,285 crops: Celeb-DF, DFDC and Real-Life splits |
+| ImageNet weights | `mradulmanimishra/deepfake-pretrained` | `efficientnet_b3`, `convnext_tiny` safetensors |
+| Celeb-DF checkpoints | `mradulmanimishra/deepfake-ckpt-celebdf` | per-domain timm + YOLO weights |
+
+Three environment problems had to be solved in code rather than by
+configuration:
+
+1. **Datasets mount at `/kaggle/input/datasets/<owner>/<slug>/`.** The
+   notebooks looked at `/kaggle/input/<slug>/` and concluded the dataset
+   was missing. The kernel now probes both layouts.
+2. **No internet.** `pip install` is impossible, so `ultralytics` and
+   `facenet-pytorch` are vendored into the code dataset. `facenet-pytorch`
+   was previously imported at module level by the preprocessing package,
+   which broke *every* module that touched `preprocessing.transforms` -
+   including all three trainers. The import is now optional and degrades
+   to a Haar/centre-crop path.
+3. **The HuggingFace Hub is unreachable**, so `timm.create_model(pretrained=True)`
+   failed before the first epoch. The ImageNet weights are vendored, and a
+   `sitecustomize.py` on `PYTHONPATH` redirects `timm.create_model` at them
+   for every process, including the training subprocesses (a
+   `sitecustomize` module is imported at interpreter startup, so it also
+   covers workers that do not inherit `sys.path`).
+
 ---
 
 ## Next Steps for Delivery Readiness
