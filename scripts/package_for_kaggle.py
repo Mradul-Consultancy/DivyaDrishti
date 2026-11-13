@@ -24,9 +24,13 @@ EXCLUDES = {
     'reports',  # don't ship toy reports; Kaggle will generate real ones
     'kaggle_acc_acc-gpu', 'kaggle_acc_acc-t4x2', 'kaggle_acc_acc-p100',
     'kaggle_diag', 'kaggle_bench', 'kaggle_gputest', 'kaggle_crops_ds',
-    'kaggle_crops.zip', 'out_acc-gpu', 'out_acc-t4x2', 'out_acc-p100',
+    'kaggle_crops.zip', 'kaggle_data_ds', 'kaggle_ckpt_ds',
+    'out_acc-gpu', 'out_acc-t4x2', 'out_acc-p100',
     'diag_out', 'diag_out2', 'gpu_out', 'bench_out', 'kaggle_pilot_out',
     'pilot_out2', 'pilot_pull', 'celebdf_out2', 'celebdf_pull2',
+    # ImageNet weights ship as their own dataset: a 580 MB code dataset does
+    # not materialise reliably on Kaggle, whereas small ones do.
+    'pretrained',
 }
 # NOTE: '.pt' is NOT excluded - the YOLO26n-cls pretrained checkpoint must
 # ship with the code, otherwise YOLO training cannot start on Kaggle.
