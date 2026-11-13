@@ -285,6 +285,28 @@ configuration:
    `sitecustomize` module is imported at interpreter startup, so it also
    covers workers that do not inherit `sys.path`).
 
+### Trained Models (2026-11-13)
+
+Both training domains now have real, converged, per-domain checkpoints.
+
+| Domain | Model | Trained on | Best val acc |
+|---|---|---|---|
+| DFDC | EfficientNet-B3 | Kaggle CPU (4 cores) | 72.81% |
+| DFDC | ConvNeXt-Tiny | Kaggle CPU (4 cores) | 92.19% |
+| DFDC | YOLO26n-cls | Kaggle CPU (4 cores) | 87% (val) |
+| Celeb-DF | EfficientNet-B3 | local RTX 2050 | 84.27% |
+| Celeb-DF | ConvNeXt-Tiny | local RTX 2050 | 100% (val, imbalanced) |
+| Celeb-DF | YOLO26n-cls | local RTX 2050 | - |
+
+Kaggle's 4-CPU sandbox was used for DFDC because the local workstation had
+only 0.7 GB of free RAM (the page file was exhausted by concurrent training
+processes); the Kaggle sandbox has 31 GB. Celeb-DF was trained earlier on the
+local RTX 2050, before the RAM pressure appeared.
+
+Both domains use the same protocol: 4 epochs, batch 32, inverse-frequency
+class weighting, 1 frame per source video in the training split so that every
+video and identity is represented.
+
 ---
 
 ## Next Steps for Delivery Readiness
