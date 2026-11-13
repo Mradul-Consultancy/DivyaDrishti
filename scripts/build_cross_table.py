@@ -281,7 +281,11 @@ def evaluate_yolo_on_dir(
     all_labels = [lbl for _, lbl in image_paths]
 
     device_str = "0" if (device.type == "cuda") else "cpu"
-    results = yolo.predict(all_paths, imgsz=224, batch=batch_size, device=device_str, verbose=False)
+    # stream=True yields Results lazily. Without it Ultralytics keeps every
+    # Result object (and its GPU tensors) alive until the call returns, which
+    # exhausts VRAM on a 4 GB card for a few thousand images.
+    results = yolo.predict(all_paths, imgsz=224, batch=batch_size, device=device_str,
+                           verbose=False, stream=True)
 
     for res, true_lbl in zip(results, all_labels):
         probs = res.probs.data.cpu().numpy()
@@ -386,8 +390,10 @@ def evaluate_ensemble_on_dir(
         samples = _collect_samples(eval_path)
         if samples:
             device_str = "0" if device.type == "cuda" else "cpu"
+            # stream=True keeps only one Result alive at a time (see the
+            # comment in evaluate_yolo_on_dir).
             results = yolo.predict([str(p) for p, _ in samples], imgsz=224, batch=batch_size,
-                                   device=device_str, verbose=False)
+                                   device=device_str, verbose=False, stream=True)
             model_probs["YOLO26n-cls"] = np.array(
                 [float(r.probs.data.cpu().numpy()[fake_idx]) for r in results]
             )
@@ -617,6 +623,26 @@ def save_bar_chart(results: Dict, save_path: Path):
     logger.info(f"Bar chart saved: {save_path}")
 
 
+def _free_device_memory():
+    """
+    Releases cached GPU memory.
+
+    The cross-table loads three backbones (up to 334 MB of weights each) and
+    evaluates them one after another. Without an explicit cache flush the
+    previous model's allocations stay reserved, and the next one can fail
+    with "CUDA error: out of memory" on a small GPU - which then poisons
+    the context for every model that follows.
+    """
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 # ── Main evaluation loop ────────────────────────────────────────────────────
 
 def run_cross_table(args):
@@ -674,6 +700,8 @@ def run_cross_table(args):
                 except Exception as exc:
                     logger.error(f"    {disp_name} failed: {exc}\n{traceback.format_exc()}")
                     results[train_ds][test_name][disp_name] = None
+                finally:
+                    _free_device_memory()
 
             # YOLO
             logger.info(f"    YOLO26n-cls: {yolo_ckpt}")
@@ -688,6 +716,8 @@ def run_cross_table(args):
             except Exception as exc:
                 logger.error(f"    YOLO failed: {exc}\n{traceback.format_exc()}")
                 results[train_ds][test_name]["YOLO26n-cls"] = None
+            finally:
+                _free_device_memory()
 
             # Ensemble
             logger.info(f"    Soft-Voting Ensemble…")
@@ -703,6 +733,8 @@ def run_cross_table(args):
             except Exception as exc:
                 logger.error(f"    Ensemble failed: {exc}\n{traceback.format_exc()}")
                 results[train_ds][test_name]["Ensemble"] = None
+            finally:
+                _free_device_memory()
 
     # ── Save outputs ───────────────────────────────────────────────────────
     json_path = OUT_DIR / "cross_table.json"
