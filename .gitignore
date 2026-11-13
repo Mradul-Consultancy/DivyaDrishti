@@ -95,3 +95,10 @@ reports/*
 !reports/inference_speed_comparison.png
 
 
+kaggle_art3/
+kaggle_art4/
+kaggle_art5/
+kaggle_ckpt_ds/
+kaggle_data_ds/
+kaggle_pretrained_ds/
+kaggle_code_ds/
