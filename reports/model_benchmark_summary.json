@@ -4,39 +4,39 @@
         "trainable_parameters_m": 27.82,
         "size_mb": 334.1,
         "gflops": 8.93,
-        "latency_ms_b1": 101.36,
-        "latency_p95_ms_b1": 128.47,
-        "throughput_b1_fps": 9.9,
-        "throughput_b32_fps": 13.9
+        "latency_ms_b1": 55.96,
+        "latency_p95_ms_b1": 58.42,
+        "throughput_b1_fps": 17.9,
+        "throughput_b32_fps": 21.5
     },
     "EfficientNet-B3 (timm)": {
         "parameters_m": 10.7,
         "trainable_parameters_m": 10.7,
         "size_mb": 129.2,
         "gflops": 2.03,
-        "latency_ms_b1": 62.93,
-        "latency_p95_ms_b1": 74.69,
-        "throughput_b1_fps": 15.9,
-        "throughput_b32_fps": 17.7
+        "latency_ms_b1": 42.05,
+        "latency_p95_ms_b1": 44.27,
+        "throughput_b1_fps": 23.8,
+        "throughput_b32_fps": 20.7
     },
     "YOLO26n-cls (Ultralytics)": {
         "parameters_m": 1.53,
         "trainable_parameters_m": 0.0,
         "size_mb": 3.2,
         "gflops": 0.4,
-        "latency_ms_b1": 14.05,
-        "latency_p95_ms_b1": 18.12,
-        "throughput_b1_fps": 71.1,
-        "throughput_b32_fps": 164.0
+        "latency_ms_b1": 9.23,
+        "latency_p95_ms_b1": 10.12,
+        "throughput_b1_fps": 108.3,
+        "throughput_b32_fps": 192.2
     },
     "Soft-Voting Ensemble (All 3)": {
         "parameters_m": 40.05,
         "trainable_parameters_m": 40.05,
         "size_mb": 466.5,
         "gflops": 11.36,
-        "latency_ms_b1": 178.34,
-        "latency_p95_ms_b1": 221.28,
-        "throughput_b1_fps": 5.6,
-        "throughput_b32_fps": 14.0
+        "latency_ms_b1": 107.24,
+        "latency_p95_ms_b1": 112.81,
+        "throughput_b1_fps": 9.3,
+        "throughput_b32_fps": 23.3
     }
 }
