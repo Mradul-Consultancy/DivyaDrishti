@@ -184,6 +184,46 @@ def overlay_cam_on_image(
     return Image.fromarray(overlay)
 
 
+def generate_gradcam_for_model(
+    model: nn.Module,
+    model_name: str,
+    pil_image: Image.Image,
+    arch_type: str = "timm",
+    target_class: int = config.FAKE_LABEL_IDX,
+    device: Optional[torch.device] = None,
+    alpha: float = 0.55,
+) -> Tuple[Image.Image, np.ndarray, int, float]:
+    """
+    Generates a Grad-CAM overlay for a SINGLE model on an already-cropped face.
+
+    Uses the model's own evaluation transform, so the explanation is computed
+    on exactly the tensor the classifier saw. The older comparative helper
+    hardcoded the torchvision normalisation, which does not match the timm
+    backbones' native pipeline and therefore mislocated the activations.
+
+    Returns:
+        (overlay_image, heatmap, predicted_class, confidence)
+    """
+    device = device or config.DEVICE
+    from evaluation.evaluate import get_eval_transform
+
+    model = model.to(device)
+    model.eval()
+
+    transform = get_eval_transform(model, model_name)
+    input_batch = transform(pil_image).unsqueeze(0).to(device)
+
+    target_layer = get_default_target_layer(model, model_type=arch_type)
+    cam_engine = GradCAM(model, target_layer)
+    try:
+        cam, pred_cls, conf = cam_engine.generate_heatmap(input_batch, target_class=target_class)
+    finally:
+        cam_engine.remove_hooks()
+
+    overlay = overlay_cam_on_image(pil_image, cam, alpha=alpha)
+    return overlay, cam, pred_cls, conf
+
+
 def generate_comparative_gradcam(
     image_path: Union[str, Path],
     models_dict: Dict[str, Tuple[nn.Module, str]],

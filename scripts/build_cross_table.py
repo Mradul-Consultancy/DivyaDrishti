@@ -131,6 +131,30 @@ def _yolo_checkpoint(train_ds: str) -> Tuple[Path, bool]:
 # We therefore always use roc_curve(..., pos_label=FAKE_LABEL_IDX) + auc(),
 # matching evaluation/evaluate_ensemble.py and evaluation/generate_reports.py.
 
+
+def resolve_domain_notes() -> Dict[str, bool]:
+    """
+    Determines, per training domain, whether a domain-specific checkpoint
+    exists on disk.
+
+    Used to label every cross-dataset row with the provenance of the weights
+    that produced it, and to rebuild the CSV from a stored run without
+    re-running inference.
+    """
+    notes: Dict[str, bool] = {}
+    for train_ds in TRAIN_DATASETS:
+        has_timm = any(
+            (config.CHECKPOINT_DIR / train_ds / f"{m}_best.pth").exists()
+            for m in TIMM_MODELS.values()
+        )
+        has_yolo = (
+            config.BASE_DIR / "runs" / "yolo_cls" / train_ds /
+            f"deepfake_{train_ds}" / "weights" / "best.pt"
+        ).exists()
+        notes[train_ds] = bool(has_timm and has_yolo)
+    return notes
+
+
 def _compute_metrics(y_true: np.ndarray, y_probs: np.ndarray, threshold: float = 0.5) -> Dict[str, Any]:
     """
     Computes the standard metric set for a binary deepfake detector.
@@ -519,17 +543,39 @@ def export_csv_table(results: Dict, target_paths: List[Path],
                         "Model": model_key,
                         "Checkpoint": "domain-specific" if domain_note.get(train_ds, True) else "shared (no per-domain ckpt)",
                         "Accuracy (%)": "",
+                        "Balanced Accuracy (%)": "",
+                        "Recall Fake (%)": "",
+                        "Recall Real (%)": "",
                         "F1-Score (%)": "",
                         "ROC-AUC": "",
                         "Brier Score": ""
                     })
                     continue
+                # Confusion matrix layout is [FAKE, REAL] for both axes:
+                #   cm[0][0] TP (fake as fake), cm[0][1] FN (fake as real)
+                #   cm[1][0] FP (real as fake), cm[1][1] TN (real as real)
+                cm = mets.get("confusion_matrix") or []
+                rec_fake = rec_real = bal_acc = None
+                if len(cm) == 2 and len(cm[0]) == 2 and len(cm[1]) == 2:
+                    tp, fn = cm[0][0], cm[0][1]
+                    fp, tn = cm[1][0], cm[1][1]
+                    rec_fake = tp / (tp + fn) if (tp + fn) else None
+                    rec_real = tn / (tn + fp) if (tn + fp) else None
+                    if rec_fake is not None and rec_real is not None:
+                        bal_acc = (rec_fake + rec_real) / 2.0
+
+                def _pct(v):
+                    return "" if v is None else f"{v*100:.2f}"
+
                 rows.append({
                     "Trained on": train_ds.upper(),
                     "Test dataset": test_name,
                     "Model": model_key,
                     "Checkpoint": "domain-specific" if domain_note.get(train_ds, True) else "shared (no per-domain ckpt)",
                     "Accuracy (%)": f"{mets.get('accuracy', 0)*100:.2f}",
+                    "Balanced Accuracy (%)": _pct(bal_acc),
+                    "Recall Fake (%)": _pct(rec_fake),
+                    "Recall Real (%)": _pct(rec_real),
                     "F1-Score (%)": f"{mets.get('f1_score', 0)*100:.2f}",
                     "ROC-AUC": f"{mets.get('roc_auc', 0):.4f}",
                     "Brier Score": f"{mets.get('brier_score', 0):.4f}"

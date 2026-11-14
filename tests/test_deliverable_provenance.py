@@ -63,26 +63,37 @@ class TestDeliverableProvenance:
         rows = _cross_rows()
         allowed = set()
         for r in rows:
-            for key in ("Accuracy (%)", "F1-Score (%)", "ROC-AUC", "Brier Score"):
-                v = (r.get(key) or "").strip()
-                if v:
-                    allowed.add(v)
-                    # the deliverable prints percentages with two decimals
-                    try:
-                        allowed.add(f"{float(v):.2f}")
-                        allowed.add(f"{float(v):.4f}")
-                    except ValueError:
-                        pass
+            for key, v in r.items():
+                v = (v or "").strip()
+                if not v:
+                    continue
+                allowed.add(v)
+                try:
+                    allowed.add(f"{float(v):.2f}")
+                    allowed.add(f"{float(v):.4f}")
+                except ValueError:
+                    pass
 
-        # Extract the Table 2 rows: "| TRAINED | TEST | MODEL | CKPT | a | f | auc | brier |"
-        table_rows = [ln for ln in txt.splitlines()
-                      if ln.startswith("|") and ln.count("|") == 9]
-        assert table_rows, "Table 2 not found in the deliverable"
+        # Locate Table 2 by its header, then use the header's column count
+        # rather than a hardcoded number of pipes.
+        table_lines = [ln for ln in txt.splitlines() if ln.startswith("|")]
+        header_idx = None
+        ncols = None
+        for i, ln in enumerate(table_lines):
+            cells = [c.strip() for c in ln.strip("|").split("|")]
+            if cells[:3] == ["Trained on", "Test dataset", "Model"]:
+                header_idx = i
+                ncols = len(cells)
+                break
+        assert header_idx is not None, "Table 2 header not found in the deliverable"
 
         checked = 0
-        for ln in table_rows:
+        for ln in table_lines[header_idx + 2:]:
             cells = [c.strip() for c in ln.strip("|").split("|")]
-            for value in cells[4:]:
+            if len(cells) != ncols:
+                continue
+            # The first three cells identify the row; the rest are metrics.
+            for value in cells[3:]:
                 if not re.fullmatch(r"-?\d+(\.\d+)?", value):
                     continue
                 assert value in allowed, (

@@ -21,3 +21,23 @@ kaggle>=2.0.0
 matplotlib>=3.7.0
 tqdm>=4.65.0
 
+# --- Serving & interactive UI ---------------------------------------------
+# The Streamlit app (app.py) and the HTTP API (api/server.py).
+streamlit>=1.30.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+python-multipart>=0.0.9
+
+# --- Testing ---------------------------------------------------------------
+pytest>=7.4.0
+
+# --- Optional --------------------------------------------------------------
+# ONNX Runtime enables the exported-graph inference path. It is optional
+# because it is not needed for training or for the PyTorch inference path.
+# onnxruntime>=1.17.0
+#
+# c2pa-python performs *cryptographic* C2PA signature verification. Without
+# it the API can only DETECT that a manifest is present, and says so in the
+# response rather than implying the signature was checked.
+# c2pa-python>=0.4.0

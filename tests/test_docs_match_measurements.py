@@ -141,6 +141,39 @@ class TestReadmeQuotesMeasuredNumbers:
                 f"weights row does not quote a measured ROC-AUC: {ln!r}"
             )
 
+    def test_readme_calibration_table_matches_the_artefact(self):
+        """The operating-point table must be the measured one, not a copy."""
+        cal_path = REPORTS / "calibration_summary.json"
+        if not cal_path.exists():
+            pytest.skip("no calibration summary generated yet")
+        txt = _read(README)
+        measured = json.loads(cal_path.read_text(encoding="utf-8"))
+        checked = 0
+        for entry in measured:
+            thr = f"{entry['threshold']:.4f}"
+            fpr = f"{entry['fpr_at_chosen']*100:.1f}%"
+            # Both the threshold and the calibrated FPR must appear verbatim.
+            assert thr in txt, f"threshold {thr} missing from the README"
+            assert fpr in txt, f"calibrated FPR {fpr} missing from the README"
+            checked += 1
+        assert checked > 0
+
+    def test_readme_spectral_table_matches_the_artefact(self):
+        """The spectral ablation figures must come from the measured run."""
+        paths = sorted(REPORTS.glob("spectral_ablation_*.json"))
+        if not paths:
+            pytest.skip("no spectral ablation generated yet")
+        txt = _read(README)
+        for path in paths:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for key in ("auc_neural_only", "auc_spectral_only", "auc_neural_plus_spectral"):
+                v = data.get(key)
+                if v is None:
+                    continue
+                assert f"{v:.4f}" in txt, (
+                    f"spectral figure {v:.4f} ({key}) missing from the README"
+                )
+
 
 class TestProjectDocumentationQuotesMeasuredNumbers:
     def test_documentation_exists(self):

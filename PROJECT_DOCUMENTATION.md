@@ -326,6 +326,80 @@ tests/                                      <- Automated regression tests
       number in `reports/FINAL_CLIENT_DELIVERABLE.md` must appear in the artefact it came
       from; editing the document by hand fails the suite.
 
+13. **Phase 13: Enterprise Readiness — Serving, Calibration, Explainability & Forensics** *(2026-11-14)*
+
+    A review against a Tier-1 deployment bar surfaced real defects in the inference
+    path. All fixes below are covered by regression tests.
+
+    **Correctness defects found and fixed**
+
+    - `evaluation/predict.py` applied the generic torchvision resize to timm
+      backbones, which are trained with their native bicubic pipeline. It now
+      derives the transform from the model, matching `evaluation/evaluate.py`.
+    - `preprocessing/face_extractor.py` silently centre-cropped every image:
+      OpenCV 5 removed both `CascadeClassifier` and the bundled cascade XMLs, so
+      the Haar path never initialised and the extractor always fell back. Face
+      detection now uses MTCNN (the detector used in training), with the Haar
+      cascade as a fallback when genuinely available.
+    - The extractor assumed a single face and returned whichever face the
+      detector happened to produce first. It now returns every face with its
+      bounding box and confidence, and scores all of them.
+    - A frame with no acceptable face was scored as if the background were a
+      face crop. Detection now fails explicitly (`FaceNotFoundError`) and the
+      API returns 422 instead of an arbitrary probability.
+
+    **Operating-point calibration** (`evaluation/calibration.py`)
+
+    At the default 0.5 threshold the detectors called a large share of
+    authentic faces fake on the imbalanced Celeb-DF v2 split. Measured on each
+    domain's validation split:
+
+    | Domain | Model | FPR at 0.5 | FPR at calibrated threshold | Fake recall at threshold |
+    |---|---|---:|---:|---:|
+    | celebdf | efficientnet_b3.ra2_in1k | 51.6% | 24.5% | 65.8% |
+    | celebdf | convnext_tiny.fb_in22k_ft_in1k | 75.5% | 28.4% | 87.1% |
+    | celebdf | resnet18 | 46.8% | 10.0% | 86.2% |
+    | dfdc | efficientnet_b3.ra2_in1k | 35.0% | 41.0% | 87.3% |
+    | dfdc | convnext_tiny.fb_in22k_ft_in1k | 7.0% | 4.0% | 90.5% |
+
+    Calibration is a real improvement but does not make the detector safe to
+    deploy: a 10-28% false-positive rate on authentic faces remains far too
+    high. The binding constraint is detector quality, not the threshold.
+
+    **Frequency-domain branch** (`evaluation/spectral.py`) - measured, not assumed:
+
+    | Evaluation | Neural only | Spectral only | Neural + spectral |
+    |---|---:|---:|---:|
+    | In-domain (Celeb-DF test) | 0.9215 | 0.6230 | 0.9125 |
+    | Cross-domain (unseen Real-Life) | 0.6533 | 0.1038 | **0.8157** |
+
+    The branch helps on the unseen domain (+0.16 AUC) and adds nothing
+    in-domain. The combiner is a logistic regression fitted on validation and
+    stored as JSON, so inference needs no extra dependency.
+
+    **Fairness audit** (`evaluation/bias_audit.py`) - the project has **no
+    protected-attribute labels** in any manifest, so a Fitzpatrick / age /
+    gender matrix cannot be produced from the released data. The audit reports
+    that coverage gap explicitly and instead measures performance stratified by
+    capture-condition proxies that are derivable (blur, brightness, contrast)
+    plus per-identity variance.
+
+    **Serving and forensics**
+    - `api/server.py`: FastAPI service with `/v1/detect/image`,
+      `/v1/detect/video`, `/v1/models`, `/health` and audit endpoints.
+      Video responses carry timeline hotspots and a temporal-consistency score.
+    - `api/audit.py`: decision records keep a SHA-256 digest of the input and
+      never the image bytes, so no biometric content is persisted.
+    - `api/c2pa.py`: detects Content-Credentials manifests and explicitly
+      reports that the signature was **not** cryptographically verified (the
+      C2PA SDK is unavailable offline) rather than implying it was checked.
+    - `api/forensic.py`: produces a report with the media digest, the model,
+      threshold, detector configuration and C2PA status, plus a self-digest
+      that detects tampering.
+    - Grad-CAM is wired into the CLI, the Streamlit app and the API, and now
+      uses the model's own transform so the heatmap matches the scored tensor.
+
+
 ---
 
 ## 4. Why Each Decision Was Made (Engineering & Scientific Rationale)
@@ -452,5 +526,5 @@ not present in the artefact it came from.
 | **Cross-Dataset Tests** | `tests/test_cross_dataset.py` | PASSED | 11 tests: Celeb-DF, DFDC, Real-Life directory structure, resolver, reporting |
 | **Bootstrap Guard Tests** | `tests/test_bootstrap_guard.py` | PASSED | 3 tests: cluster bootstrap refuses fewer than 20 clusters |
 | **Min Videos Guard Tests** | `tests/test_min_videos_per_class.py` | PASSED | 2 tests: report generation halts below 10 videos per class |
-| **Full Test Suite** | `pytest tests/` | PASSED | **111/111 tests** (Windows, Python 3.12.10) |
+| **Full Test Suite** | `pytest tests/` | PASSED | **142/142 tests** (Windows, Python 3.12.10) |
 

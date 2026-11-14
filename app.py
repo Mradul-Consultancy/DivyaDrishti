@@ -113,19 +113,23 @@ def main():
     model_options = {
         "ConvNeXt-Tiny (CelebDF Tuned - Best Discrimination)": {
             "name": "convnext_tiny.fb_in22k_ft_in1k",
-            "file": "celebdf/convnext_tiny.fb_in22k_ft_in1k_best.pth"
+            "file": "celebdf/convnext_tiny.fb_in22k_ft_in1k_best.pth",
+            "domain": "celebdf",
         },
         "ConvNeXt-Tiny (General Purpose Backbone)": {
             "name": "convnext_tiny.fb_in22k_ft_in1k",
-            "file": "convnext_tiny.fb_in22k_ft_in1k_best.pth"
+            "file": "convnext_tiny.fb_in22k_ft_in1k_best.pth",
+            "domain": "celebdf",
         },
         "EfficientNet-B3 (In-Domain Checkpoint)": {
             "name": "efficientnet_b3.ra2_in1k",
-            "file": "efficientnet_b3.ra2_in1k_best.pth"
+            "file": "efficientnet_b3.ra2_in1k_best.pth",
+            "domain": "celebdf",
         },
         "ResNet-18 (Lightweight Baseline)": {
             "name": "resnet18",
-            "file": "resnet18_best.pth"
+            "file": "resnet18_best.pth",
+            "domain": "celebdf",
         }
     }
 
@@ -139,7 +143,27 @@ def main():
     else:
         st.sidebar.success(f"✅ Loaded: `{Path(model_cfg['file']).name}`")
 
-    threshold = st.sidebar.slider("Classification Threshold (Fake %)", min_value=10, max_value=90, value=50, step=5) / 100.0
+    # The threshold defaults to the value calibrated on this domain's
+    # VALIDATION split. At 0.5 the detectors called roughly half of all
+    # authentic faces fake on the imbalanced Celeb-DF v2 split, so the
+    # default matters a great deal.
+    domain = model_cfg.get("domain")
+    calibrated = load_threshold(domain, model_cfg["name"]) if domain else 0.5
+    threshold = st.sidebar.slider(
+        "Classification Threshold (Fake %)",
+        min_value=10, max_value=99,
+        value=int(round(calibrated * 100)), step=1,
+    ) / 100.0
+    if domain:
+        st.sidebar.caption(
+            f"Calibrated on {domain} validation data: {calibrated:.3f} "
+            "(balanced operating point)."
+        )
+    show_heatmap = st.sidebar.checkbox(
+        "Show Grad-CAM explainability overlay", value=False,
+        help="Highlights the regions that drove the score - evidence a "
+             "reviewer needs before acting on a verdict.",
+    )
 
     # Quick Samples Loader in Sidebar
     st.sidebar.markdown("---")
@@ -189,8 +213,21 @@ def main():
                     st.error("Please ensure the selected model checkpoint exists.")
                 else:
                     with st.spinner("Detecting facial bounding box and evaluating forgery indicators..."):
-                        face_crop = extractor.extract_face(img_pil)
-                        st.image(face_crop, caption="Analyzed Facial Region", width=180)
+                        # Score EVERY detected face; a frame with several
+                        # people is no longer judged on an arbitrary one.
+                        faces = extractor.extract_faces(img_pil)
+                        if not faces:
+                            st.warning(
+                                "No face was detected with sufficient confidence, so no "
+                                "verdict was produced. The detectors are trained on face "
+                                "crops only, so scoring this frame would be meaningless."
+                            )
+                            st.stop()
+                        face_crop = faces[0].image
+                        caption = "Analyzed Facial Region"
+                        if len(faces) > 1:
+                            caption += f" (of {len(faces)} faces detected)"
+                        st.image(face_crop, caption=caption, width=180)
 
                         tensor = transform(face_crop).unsqueeze(0).to(device)
                         with torch.no_grad():
@@ -200,6 +237,18 @@ def main():
                             prob_real = float(probs[REAL_CLASS_IDX].item())
 
                         is_fake = prob_fake >= threshold
+
+                        # Grad-CAM: a score on its own is not actionable
+                        # evidence. The overlay shows which pixels drove it.
+                        if show_heatmap:
+                            try:
+                                overlay, _cam, _cls, _conf = generate_gradcam_for_model(
+                                    model, model_cfg["name"], face_crop,
+                                    target_class=FAKE_CLASS_IDX, device=device,
+                                )
+                                st.image(overlay, caption="Grad-CAM (FAKE class) - regions driving the score", width=180)
+                            except Exception as e:
+                                st.warning(f"Grad-CAM unavailable: {e}")
 
                         st.write("---")
                         st.write("### Detection Verdict")
@@ -213,6 +262,12 @@ def main():
                                 f'Authentic Probability: {prob_real*100:.2f}%'
                                 f'</div>',
                                 unsafe_allow_html=True
+                            )
+                            st.caption(
+                                "Threshold calibrated on validation data. Note the "
+                                "measured false-positive rate on authentic faces "
+                                "(see reports/calibration_summary.json) before "
+                                "treating a verdict as evidence."
                             )
                         else:
                             st.markdown(
@@ -260,7 +315,11 @@ def main():
                                 if current % step == 0:
                                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                                     frame_pil = Image.fromarray(frame_rgb)
-                                    face_crop = extractor.extract_face(frame_pil)
+                                    frame_faces = extractor.extract_faces(frame_pil)
+                                    if not frame_faces:
+                                        current += 1
+                                        continue
+                                    face_crop = frame_faces[0].image
                                     
                                     tensor = transform(face_crop).unsqueeze(0).to(device)
                                     with torch.no_grad():

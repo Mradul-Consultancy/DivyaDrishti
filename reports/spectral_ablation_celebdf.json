@@ -1,0 +1,27 @@
+{
+  "domain": "celebdf",
+  "model": "convnext_tiny.fb_in22k_ft_in1k",
+  "samples_val": 1380,
+  "samples_test": 1200,
+  "test_dir": "data\\real_life",
+  "cross_dataset": true,
+  "features": [
+    "high_freq_energy_ratio",
+    "radial_spectral_slope",
+    "periodic_peak_strength",
+    "azimuthal_anisotropy",
+    "spectral_entropy"
+  ],
+  "note": "Fitted on validation, scored on the held-out test split. FAKE is the positive class; 0.5 is chance.",
+  "auc_neural_only": 0.6532888888888889,
+  "auc_spectral_only": 0.10380555555555557,
+  "auc_neural_plus_spectral": 0.8156694444444444,
+  "auc_single_feature": {
+    "high_freq_energy_ratio": 0.18128611111111112,
+    "radial_spectral_slope": 0.7667805555555555,
+    "periodic_peak_strength": 0.1562111111111111,
+    "azimuthal_anisotropy": 0.7507444444444444,
+    "spectral_entropy": 0.12950277777777777
+  },
+  "combiner_saved_to": "E:\\deepfake\\models\\checkpoints\\celebdf\\spectral_combiner.json"
+}

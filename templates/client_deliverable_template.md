@@ -47,7 +47,24 @@
 
 ---
 
-## 5. Findings
+## 5. Operating Points (False-Positive Rates)
+
+{{OPERATING_POINTS}}
+
+> **Why this matters.** A threshold of 0.5 is only meaningful for a balanced test set.
+> On the imbalanced Celeb-DF v2 split it would accuse a large share of authentic
+> faces. The table above shows the measured false-positive rate at 0.5 and at the
+> shipped operating point, so the trade-off is explicit rather than implicit.
+
+---
+
+## 6. Frequency-Domain (Spectral) Branch
+
+{{SPECTRAL}}
+
+---
+
+## 7. Findings
 
 *Every statement below is derived automatically from the artefacts in Sections 1–4.
 No sentence is hand-written, so this section cannot drift away from the results.*
@@ -56,7 +73,7 @@ No sentence is hand-written, so this section cannot drift away from the results.
 
 ---
 
-## 6. Limitations & Risks
+## 8. Limitations & Risks
 
 - **Dataset scope**: Models were trained and tested on DFDC and Celeb-DF only. Performance on
   other deepfake types (e.g., text-driven video synthesis, lip-sync fakes) is unknown.

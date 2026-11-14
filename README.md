@@ -187,6 +187,140 @@ deepfake/
 
 ---
 
+## 🛠️ Serving, Explainability & Forensic Tooling
+
+### HTTP API (`api/server.py`)
+
+```bash
+uvicorn api.server:app --host 0.0.0.0 --port 8000
+# or: python api/server.py
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Service status, available checkpoints, calibrated domains |
+| `GET /v1/models` | Checkpoints with their measured calibration and operating point |
+| `POST /v1/detect/image` | Single-image detection (multipart upload) |
+| `POST /v1/detect/video` | Video analysis with timeline hotspots and a temporal-consistency score |
+| `GET /v1/audit/recent` | Recent decision records - metadata only, never image content |
+| `POST /v1/audit/purge` | Clears the in-memory decision buffer |
+
+Response envelope for `/v1/detect/image`:
+
+```json
+{
+  "verdict": "fake",
+  "fake_probability": 0.8842,
+  "confidence": 0.8842,
+  "threshold": 0.8183,
+  "threshold_source": "calibrated",
+  "face_count": 1,
+  "faces": [{"box": [10, 0, 224, 224], "detection_confidence": 1.0,
+             "fake_probability": 0.8842, "real_probability": 0.1158}],
+  "gradcam_base64": null,
+  "processing_time_ms": 41.7,
+  "model": "convnext_tiny.fb_in22k_ft_in1k",
+  "input_sha256": "…",
+  "c2pa_present": false
+}
+```
+
+**Compliance properties built into the service**
+
+* **No biometric content is persisted.** Uploads are processed in memory and
+  dropped; the audit trail keeps only the SHA-256 digest of the input bytes.
+* **Every decision is attributable.** Each inference appends a record with the
+  model, the threshold applied and its source, the digest of the input and the
+  outcome.
+* **The threshold is calibrated, not assumed** (see below).
+* **C2PA is inspected, not assumed.** The response says whether a
+  Content-Credentials manifest is present; because the C2PA SDK is not
+  available offline, the signature is explicitly reported as *not verified*
+  rather than being implied to be checked.
+
+### Calibrated operating points (`evaluation/calibration.py`)
+
+A threshold of 0.5 is only meaningful for a balanced test set. On the
+imbalanced Celeb-DF v2 split the detectors called **47-76% of authentic
+faces fake** at 0.5. The threshold is therefore measured on each domain's
+**validation** split and shipped as an operating point:
+
+```bash
+python -m evaluation.calibration --domain celebdf --model convnext_tiny.fb_in22k_ft_in1k
+```
+
+Measured results (validation split; the test split is never used for
+threshold selection):
+
+| Domain | Model | Threshold | FPR at 0.5 | FPR at threshold | Fake recall at threshold |
+|---|---|---:|---:|---:|---:|
+| celebdf | efficientnet_b3.ra2_in1k | 0.9323 | 51.6% | 24.5% | 65.8% |
+| celebdf | convnext_tiny.fb_in22k_ft_in1k | 0.8183 | 75.5% | 28.4% | 87.1% |
+| celebdf | resnet18 | 0.9576 | 46.8% | 10.0% | 86.2% |
+| dfdc | efficientnet_b3.ra2_in1k | 0.2107 | 35.0% | 41.0% | 87.3% |
+| dfdc | convnext_tiny.fb_in22k_ft_in1k | 0.5245 | 7.0% | 4.0% | 90.5% |
+
+> **Read this honestly.** Calibration substantially reduces the false-positive
+> rate, but a 10-28% FPR is still far too high to deploy against real people.
+> The underlying problem is detector quality on this data, not the threshold.
+
+### Frequency-domain branch (`evaluation/spectral.py`)
+
+Spectral descriptors (high-frequency energy ratio, radial spectral slope,
+periodic peak strength, azimuthal anisotropy, spectral entropy) are computed
+for each face crop and can be combined with the neural score.
+
+```bash
+python evaluation/evaluate_spectral.py --domain celebdf \
+    --model convnext_tiny.fb_in22k_ft_in1k --test-dir data/real_life
+```
+
+**Measured** (fitted on validation, scored on the held-out split):
+
+| Evaluation | Neural only | Spectral only | Neural + spectral |
+|---|---:|---:|---:|
+| In-domain (Celeb-DF test) | 0.9215 | 0.6230 | 0.9125 |
+| Cross-domain (unseen Real-Life) | 0.6533 | 0.1038 | **0.8157** |
+
+The branch **does** help on the unseen domain (+0.16 AUC) and adds nothing
+in-domain. This was measured rather than assumed.
+
+### Fairness audit (`evaluation/bias_audit.py`)
+
+```bash
+python evaluation/bias_audit.py --domain celebdf --model convnext_tiny.fb_in22k_ft_in1k
+```
+
+**The project has no protected-attribute labels.** Celeb-DF v2 and DFDC
+carry no age, gender, skin-tone or ethnicity annotation, so a Fitzpatrick
+fairness matrix **cannot** be produced from the released data, and this
+script reports that gap explicitly rather than fabricating a matrix.
+
+What it does measure is performance stratified by capture-condition proxies
+that *are* derivable - blur, brightness, contrast - plus per-identity
+variance. In the current run no proxy stratum exceeded 1.5x the overall
+false-positive rate.
+
+### Forensic reports (`api/forensic.py`)
+
+```bash
+python -m api.forensic --report reports/forensic_report.json
+```
+
+Produces a report containing the SHA-256 of the analysed media, the model,
+checkpoint, threshold, detector configuration, C2PA status and the verdict -
+with a self-digest so a third party can verify it has not been altered. The
+media itself is never embedded, only its digest.
+
+### Explainability
+
+Grad-CAM is available in the CLI, the Streamlit app ("Show Grad-CAM
+explainability overlay" in the sidebar) and the API (`explain=true`). It uses
+the model's own transform, so the heatmap is computed on exactly the tensor
+the classifier saw.
+
+---
+
 ## Step-by-Step Guide
 
 ### Step 1: Environment Setup

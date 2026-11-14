@@ -95,6 +95,10 @@ reports/*
 !reports/inference_speed_comparison.png
 !reports/speed_table.csv
 !reports/cross_dataset_table.csv
+!reports/calibration_summary.json
+!reports/spectral_ablation_celebdf.json
+!reports/bias_audit_celebdf.json
+!reports/bias_audit_celebdf.md
 
 
 kaggle_art3/

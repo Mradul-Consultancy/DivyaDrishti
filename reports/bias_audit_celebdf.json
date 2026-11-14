@@ -1,0 +1,156 @@
+{
+  "domain": "celebdf",
+  "model": "convnext_tiny.fb_in22k_ft_in1k",
+  "samples": 1175,
+  "fake_samples": 750,
+  "real_samples": 425,
+  "overall": {
+    "auc": 0.9208141176470589,
+    "fake_recall": 0.996,
+    "false_positive_rate": 0.5623529411764706
+  },
+  "demographic_labels": {
+    "labelled_files": {},
+    "has_demographic_labels": false,
+    "note": "No protected-attribute labels were found in the dataset metadata, so a Fitzpatrick / age / gender fairness matrix cannot be produced from the released data. The proxy strata below are the substitutes that CAN be measured today."
+  },
+  "proxy_strata": {
+    "blur": {
+      "quartile_edges": [
+        18.47959704599694,
+        27.704790170169883,
+        40.261437824595625
+      ],
+      "strata": [
+        {
+          "stratum": "Q1",
+          "n_fake": 185,
+          "n_real": 109,
+          "fake_recall": 1.0,
+          "false_positive_rate": 0.6972477064220184,
+          "mean_p_fake_fake": 0.8634642997303524,
+          "mean_p_fake_real": 0.593991271271413
+        },
+        {
+          "stratum": "Q2",
+          "n_fake": 197,
+          "n_real": 97,
+          "fake_recall": 0.9949238578680203,
+          "false_positive_rate": 0.4536082474226804,
+          "mean_p_fake_fake": 0.8583719795427952,
+          "mean_p_fake_real": 0.4455841742263934
+        },
+        {
+          "stratum": "Q3",
+          "n_fake": 195,
+          "n_real": 98,
+          "fake_recall": 0.9948717948717949,
+          "false_positive_rate": 0.5204081632653061,
+          "mean_p_fake_fake": 0.8565448172581501,
+          "mean_p_fake_real": 0.49388962461404046
+        },
+        {
+          "stratum": "Q4",
+          "n_fake": 173,
+          "n_real": 121,
+          "fake_recall": 0.9942196531791907,
+          "false_positive_rate": 0.5619834710743802,
+          "mean_p_fake_fake": 0.8452436980398405,
+          "mean_p_fake_real": 0.5086161356942713
+        }
+      ]
+    },
+    "brightness": {
+      "quartile_edges": [
+        75.58195153061224,
+        88.91374362244898,
+        106.77048788265306
+      ],
+      "strata": [
+        {
+          "stratum": "Q1",
+          "n_fake": 177,
+          "n_real": 117,
+          "fake_recall": 0.9887005649717514,
+          "false_positive_rate": 0.48717948717948717,
+          "mean_p_fake_fake": 0.8592944451644595,
+          "mean_p_fake_real": 0.4547328969511466
+        },
+        {
+          "stratum": "Q2",
+          "n_fake": 203,
+          "n_real": 91,
+          "fake_recall": 1.0,
+          "false_positive_rate": 0.5384615384615384,
+          "mean_p_fake_fake": 0.8615282765162989,
+          "mean_p_fake_real": 0.5096494790760207
+        },
+        {
+          "stratum": "Q3",
+          "n_fake": 177,
+          "n_real": 116,
+          "fake_recall": 0.9943502824858758,
+          "false_positive_rate": 0.5603448275862069,
+          "mean_p_fake_fake": 0.8511331112960637,
+          "mean_p_fake_real": 0.5184307747424163
+        },
+        {
+          "stratum": "Q4",
+          "n_fake": 193,
+          "n_real": 101,
+          "fake_recall": 1.0,
+          "false_positive_rate": 0.6732673267326733,
+          "mean_p_fake_fake": 0.8521122120204985,
+          "mean_p_fake_real": 0.5761448286178679
+        }
+      ]
+    },
+    "contrast": {
+      "quartile_edges": [
+        40.156411426454284,
+        45.357466421691576,
+        51.036637493341004
+      ],
+      "strata": [
+        {
+          "stratum": "Q1",
+          "n_fake": 172,
+          "n_real": 122,
+          "fake_recall": 0.9941860465116279,
+          "false_positive_rate": 0.5163934426229508,
+          "mean_p_fake_fake": 0.8512492732599725,
+          "mean_p_fake_real": 0.4662834790031441
+        },
+        {
+          "stratum": "Q2",
+          "n_fake": 193,
+          "n_real": 101,
+          "fake_recall": 1.0,
+          "false_positive_rate": 0.504950495049505,
+          "mean_p_fake_fake": 0.8602975810747691,
+          "mean_p_fake_real": 0.49868763657747817
+        },
+        {
+          "stratum": "Q3",
+          "n_fake": 201,
+          "n_real": 92,
+          "fake_recall": 1.0,
+          "false_positive_rate": 0.5652173913043478,
+          "mean_p_fake_fake": 0.8570992080726434,
+          "mean_p_fake_real": 0.49807221282516484
+        },
+        {
+          "stratum": "Q4",
+          "n_fake": 184,
+          "n_real": 110,
+          "fake_recall": 0.9891304347826086,
+          "false_positive_rate": 0.6636363636363637,
+          "mean_p_fake_fake": 0.8552408998670138,
+          "mean_p_fake_real": 0.5893979071554812
+        }
+      ]
+    }
+  },
+  "flagged_strata": [],
+  "interpretation": "Proxy strata, not protected attributes. A flagged stratum means the detector misclassifies authentic faces more often under those capture conditions and warrants investigation."
+}

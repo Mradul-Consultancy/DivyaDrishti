@@ -140,6 +140,90 @@ def build_training_status_section() -> str:
     return "\n".join(lines)
 
 
+
+def build_operating_points_section() -> str:
+    """
+    Reports the measured operating points for each calibrated model.
+
+    This is the evidence behind the decision threshold: the numbers show
+    what fraction of authentic faces would be wrongly accused at the
+    default 0.5 threshold versus the calibrated one.
+    """
+    path = REPORTS / "calibration_summary.json"
+    if not path.exists():
+        return "_No calibration has been run yet - run `python -m evaluation.calibration`._"
+
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return "_Calibration summary could not be read._"
+    if not rows:
+        return "_No calibration entries._"
+
+    lines = [
+        "| Domain | Model | Threshold | FPR at 0.5 | FPR at threshold | Fake recall at 0.5 | Fake recall at threshold | Real recall at threshold |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r['domain']} | {r['model']} | {r['threshold']:.4f} | "
+            f"{r['fpr_at_default_0.5']*100:.1f}% | {r['fpr_at_chosen']*100:.1f}% | "
+            f"{r['fake_recall_at_default_0.5']*100:.1f}% | {r['fake_recall_at_chosen']*100:.1f}% | "
+            f"{r['real_recall_at_chosen']*100:.1f}% |"
+        )
+    lines += [
+        "",
+        "FPR is the share of **authentic** faces wrongly classified as fake. It is "
+        "measured on each domain's validation split; the test split is never used "
+        "for threshold selection. The threshold column is the shipped operating "
+        "point (the balanced Youden point).",
+    ]
+    return "\n".join(lines)
+
+
+def build_spectral_section() -> str:
+    """
+    Reports the measured value of the frequency-domain branch.
+
+    The claim that a spectral branch lifts in-the-wild AUC to 0.85 is a
+    hypothesis. This section reports what was actually measured.
+    """
+    rows = []
+    for path in sorted(REPORTS.glob("spectral_ablation_*.json")):
+        try:
+            rows.append(json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    if not rows:
+        return "_No spectral ablation has been run yet._"
+
+    lines = [
+        "| Evaluation | Model | Neural only | Spectral only | Neural + spectral |",
+        "|---|---|---:|---:|---:|",
+    ]
+    for r in rows:
+        kind = "cross-domain (unseen)" if r.get("cross_dataset") else "in-domain"
+        lines.append(
+            f"| {kind} | {r['model']} | "
+            f"{_fmt_auc(r.get('auc_neural_only'))} | "
+            f"{_fmt_auc(r.get('auc_spectral_only'))} | "
+            f"{_fmt_auc(r.get('auc_neural_plus_spectral'))} |"
+        )
+    lines += [
+        "",
+        "ROC-AUC, FAKE as the positive class, fitted on validation and scored on "
+        "the held-out split. The spectral branch helps on the *unseen* "
+        "evaluation domain and adds nothing in-domain.",
+    ]
+    return "\n".join(lines)
+
+
+def _fmt_auc(v) -> str:
+    if v is None:
+        return "n/a"
+    return f"{float(v):.4f}"
+
+
 def build_findings_section(summary: dict, cross_rows: list) -> str:
     """
     Derives the findings narrative from the artefacts:
@@ -236,6 +320,8 @@ def main():
     metrics_md  = build_metrics_section(summary)
     findings_md = build_findings_section(summary, cross_rows)
     training_md = build_training_status_section()
+    operating_md = build_operating_points_section()
+    spectral_md = build_spectral_section()
 
     # Read the template (which must NOT contain hard-coded numbers)
     if not TEMPLATE.exists():
@@ -250,13 +336,16 @@ def main():
         .replace("{{SPEED_TABLE}}", speed_table)
         .replace("{{FINDINGS}}", findings_md)
         .replace("{{TRAINING_STATUS}}", training_md)
+        .replace("{{OPERATING_POINTS}}", operating_md)
+        .replace("{{SPECTRAL}}", spectral_md)
         .replace("{{DATE}}", date.today().isoformat())
     )
 
     # Guard: the shipped document must not contain unsubstituted placeholders.
     leftover = [tok for tok in ("{{METRICS}}", "{{CROSS_DATASET_TABLE}}",
                                 "{{SPEED_TABLE}}", "{{FINDINGS}}",
-                                "{{TRAINING_STATUS}}", "{{DATE}}") if tok in report]
+                                "{{TRAINING_STATUS}}", "{{OPERATING_POINTS}}",
+                                "{{SPECTRAL}}", "{{DATE}}") if tok in report]
     if leftover:
         sys.exit(f"ERROR: unsubstituted placeholders remain in report: {leftover}")
 

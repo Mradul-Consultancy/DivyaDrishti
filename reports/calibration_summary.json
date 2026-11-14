@@ -1,0 +1,62 @@
+[
+  {
+    "domain": "celebdf",
+    "model": "efficientnet_b3.ra2_in1k",
+    "threshold": 0.932265,
+    "fpr_at_default_0.5": 0.515789,
+    "fpr_at_chosen": 0.244737,
+    "fake_recall_at_default_0.5": 0.873918,
+    "fake_recall_at_chosen": 0.657778,
+    "real_recall_at_chosen": 0.755263,
+    "fpr_constrained_threshold": 0.999176,
+    "target_fpr_achievable": false
+  },
+  {
+    "domain": "celebdf",
+    "model": "convnext_tiny.fb_in22k_ft_in1k",
+    "threshold": 0.818301,
+    "fpr_at_default_0.5": 0.755263,
+    "fpr_at_chosen": 0.284211,
+    "fake_recall_at_default_0.5": 0.996257,
+    "fake_recall_at_chosen": 0.870643,
+    "real_recall_at_chosen": 0.715789,
+    "fpr_constrained_threshold": 0.903324,
+    "target_fpr_achievable": false
+  },
+  {
+    "domain": "celebdf",
+    "model": "resnet18",
+    "threshold": 0.957629,
+    "fpr_at_default_0.5": 0.468421,
+    "fpr_at_chosen": 0.1,
+    "fake_recall_at_default_0.5": 0.991345,
+    "fake_recall_at_chosen": 0.862456,
+    "real_recall_at_chosen": 0.9,
+    "fpr_constrained_threshold": 0.997554,
+    "target_fpr_achievable": true
+  },
+  {
+    "domain": "dfdc",
+    "model": "efficientnet_b3.ra2_in1k",
+    "threshold": 0.210677,
+    "fpr_at_default_0.5": 0.35,
+    "fpr_at_chosen": 0.41,
+    "fake_recall_at_default_0.5": 0.759091,
+    "fake_recall_at_chosen": 0.872727,
+    "real_recall_at_chosen": 0.59,
+    "fpr_constrained_threshold": 0.998724,
+    "target_fpr_achievable": true
+  },
+  {
+    "domain": "dfdc",
+    "model": "convnext_tiny.fb_in22k_ft_in1k",
+    "threshold": 0.524466,
+    "fpr_at_default_0.5": 0.07,
+    "fpr_at_chosen": 0.04,
+    "fake_recall_at_default_0.5": 0.913636,
+    "fake_recall_at_chosen": 0.904545,
+    "real_recall_at_chosen": 0.96,
+    "fpr_constrained_threshold": 0.88507,
+    "target_fpr_achievable": true
+  }
+]
