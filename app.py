@@ -73,11 +73,11 @@ def load_detector_model(model_name: str, checkpoint_path: str):
         model = get_model(model_name=model_name, num_classes=2, pretrained=False)
         checkpoint = torch.load(checkpoint_path, map_location=device)
         
-        # Unpack state_dict if checkpoint contains metadata
-        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-            state_dict = checkpoint["model_state_dict"]
-        elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        # Unpack state_dict prioritizing 'state_dict' then 'model_state_dict'
+        if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
+        elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            state_dict = checkpoint["model_state_dict"]
         else:
             state_dict = checkpoint
 
@@ -98,8 +98,7 @@ def load_detector_model(model_name: str, checkpoint_path: str):
 
 @st.cache_resource
 def get_face_extractor():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return FaceExtractor(margin_ratio=config.FACE_MARGIN_RATIO, device=device)
+    return FaceExtractor(margin_ratio=0.2)
 
 
 def main():
