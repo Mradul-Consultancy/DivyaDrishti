@@ -23,6 +23,8 @@ import config
 from models.detector import get_model
 from preprocessing.face_extractor import FaceExtractor
 from evaluation.evaluate import get_eval_transform
+from evaluation.calibration import load_threshold
+from evaluation.gradcam import generate_gradcam_for_model
 
 # Standard ImageFolder alphabetical sorting: 'fake' = 0, 'real' = 1
 FAKE_CLASS_IDX = config.FAKE_LABEL_IDX  # 0
