@@ -7,15 +7,15 @@
 
 | Layer | % Done | Evidence |
 |---|---|---|
-| **Pipeline code** (preprocessing, training, evaluation, CLI) | 100% | All modules operational, **71/71 tests pass**, `main.py --help` shows 18 commands |
-| **Data** (actual images to train on) | ~25% | DFDC 200-video subset downloaded; Celeb-DF extraction populated train/val splits; download scripts ready for full Kaggle GPU pull |
-| **Trained models** (real, convergent weights) | 0% (Queued) | Pilot notebook v2 queued on Kaggle T4 GPU (`mradulmanimishra/deepfake-pilot-gpu`); local CPU training avoided. **All current checkpoints are epoch-1/2 warm-up runs at 50% val accuracy** |
-| **Experiments** (cross-dataset table, real-life scores) | In Progress | Speed benchmark completed & verified with real parameter counts & latencies; model AUC experiments standby for Kaggle weights |
+| **Pipeline code** (preprocessing, training, evaluation, CLI) | 100% | All modules operational, **86/86 tests pass**, `main.py --help` shows 18 commands |
+| **Data** | ~90% | Full Celeb-DF v2 (6,229 videos -> 31,141 face crops) and DFDC (212 videos -> 2,120 crops) extracted with identity-aware splits; 1,200 in-the-wild images |
+| **Trained models** | 100% | 3 backbones x 2 domains = 6 per-domain checkpoints, all converged (val acc 72.8–93.5%) |
+| **Experiments** (cross-dataset table, real-life scores) | 100% | Full 24-cell train-domain x test-domain matrix, every cell populated with a real measurement |
 
-> **Delivery status: NOT READY.** The pipeline is sound and the report generator is now
-> trustworthy, but no model has been trained to convergence. Every metric currently in the
-> reports comes from warm-up checkpoints that predict a single class for every image.
-> The remaining blocker is GPU training, not code.
+> **Delivery status: READY.** Both training domains have converged per-domain
+> checkpoints, the cross-dataset matrix is fully populated with real measurements, and
+> every number in the client deliverable is derived from a generated artefact.
+> All six deliverable sections are populated and `run.ps1 deliver` exits 0.
 
 ---
 
@@ -309,30 +309,36 @@ video and identity is represented.
 
 ---
 
-## Next Steps for Delivery Readiness
+## Results Summary
 
-The code is no longer the blocker — **GPU training is**. Everything below the
-"Training" heading is mechanical and automated once weights exist.
+| Train domain | Test domain | EfficientNet-B3 | ConvNeXt-Tiny | YOLO26n-cls | Ensemble |
+|---|---|---|---|---|---|
+| Celeb-DF | Celeb-DF (in-domain) | 0.7684 | 0.9196 | 0.9403 | 0.9140 |
+| Celeb-DF | DFDC (cross) | 0.3822 | 0.5933 | 0.6489 | 0.5444 |
+| Celeb-DF | Real-Life (cross) | 0.6262 | 0.6533 | 0.5113 | 0.5971 |
+| DFDC | Celeb-DF (cross) | 0.6064 | 0.7710 | 0.6697 | 0.7217 |
+| DFDC | DFDC (in-domain) | 0.6044 | 0.8233 | 0.8678 | 0.8211 |
+| DFDC | Real-Life (cross) | 0.4497 | 0.3929 | 0.3626 | 0.4014 |
 
-1. **Execute Pilot on Kaggle GPU** *(in progress)*:
-   - Kernel `mradulmanimishra/deepfake-pilot-gpu` is `QUEUED` (submitted 2026-11-09).
-   - Run `kaggle_pilot.ipynb` with `DEEPFAKE_ENV=KAGGLE` and `QUALITY_GATE=0.70`.
-   - Inspect validation curves and gate pass banner.
-   - Download outputs with `kaggle kernels output mradulmanimishra/deepfake-pilot-gpu -p <dir>`.
+ROC-AUC with FAKE as the positive class; 0.5 is chance. The pattern is the
+expected one: each model is strongest on the domain it was trained on, drops
+when moved to an unseen dataset, and is weakest on the in-the-wild Real-Life
+set (AI-generated faces rather than frame-level manipulations).
 
-2. **Train Per-Domain Models** *(required for a valid cross-dataset table)*:
-   - Run `scripts/download_celebrity_df.py` in Kaggle sessions.
-   - Train EfficientNet-B3, ConvNeXt-Tiny, YOLO26n-cls on **each** domain, writing to
-     `models/checkpoints/celebdf/` and `models/checkpoints/dfdc/` so the
-     "Trained on" axis of the cross-dataset table becomes a real experiment rather
-     than a shared-checkpoint row.
+## Remaining Work
 
-3. **Synthesize Reports**:
-   - Run `python main.py evaluate-ensemble` -> `python scripts/build_cross_table.py`
-     -> `python scripts/regenerate_report.py`.
-   - Confirm Section 4 (Model Training Status) shows every backbone as *Converged*.
-
-4. **Commit**:
-   - Working tree has uncommitted fixes across 12 files plus the new
-     `tests/test_metric_orientation.py`.
+1. **Scale the training data.** Celeb-DF trains on 4,378 images (one frame per
+   source video) and DFDC on 1,807. More frames per video and more epochs
+   should lift both, especially the Real-Life column.
+2. **Attack the Real-Life gap.** 0.36–0.65 ROC-AUC in the wild is the weakest
+   number in the report. The Real-Life set mixes StyleGAN/Stable-Diffusion faces
+   with FaceForensics++ swaps, so a detector trained only on frame-level
+   manipulation may not transfer.
+3. **Reconcile the two evaluation engines on every future run.**
+   `main.py evaluate` and `scripts/build_cross_table.py` now agree exactly
+   (0.6044 for the same checkpoint and split) because both derive the
+   transform from the model; `tests/test_eval_transform.py` guards that.
+4. **Refresh the Kaggle kernels.** `deepfake-pilot-gpu` and
+   `deepfake-celebdf-gpu-training` still carry the old mount logic; the working
+   configuration is `kaggle_train/` (`deepfake-train-kaggle`).
 
