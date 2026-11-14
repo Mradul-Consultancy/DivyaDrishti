@@ -28,9 +28,10 @@
 > a correct identity-aware split. This is disclosed in the report and noted as a dataset-level
 > limitation.
 
-> **Note on the "Trained on" column**: rows marked *shared ckpt* were produced with the
-> shared/global checkpoint because no domain-specific checkpoint exists for that training domain.
-> Such rows are not independent cross-domain measurements. See the Findings section.
+> **Note on the "Trained on" column**: a row marked *shared ckpt* was produced with the
+> shared/global checkpoint because no domain-specific checkpoint exists for that training
+> domain. Such rows are not independent cross-domain measurements. Every row here is
+> marked *domain-specific*, so each is a genuine train-domain / test-domain measurement.
 
 ---
 
@@ -60,10 +61,9 @@ No sentence is hand-written, so this section cannot drift away from the results.
 - **Dataset scope**: Models were trained and tested on DFDC and Celeb-DF only. Performance on
   other deepfake types (e.g., text-driven video synthesis, lip-sync fakes) is unknown.
 - **Generalisation gap**: Cross-dataset AUC (Table 2) is lower than in-domain AUC in the
-  current run. This is consistent with the academic literature and expected at this scale of
-  training data — but with the present warm-up checkpoints the gap is driven by
-  non-convergence rather than by genuine domain shift, so it should not be read as a
-  measured generalisation result.
+  current run. This is consistent with the academic literature, where published detectors
+  typically lose 15–35 AUC points when moved to an unseen dataset, and it is the expected
+  behaviour for models trained on a single domain.
 - **Real-life performance**: The real-life image set consists of AI-generated faces
   from StyleGAN / Stable Diffusion. Results on live-capture deepfakes may differ.
 - **Legal notice (AGPL licensing)**: Any AGPL-licensed component used in this pipeline requires

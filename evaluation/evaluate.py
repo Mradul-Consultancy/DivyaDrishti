@@ -28,6 +28,29 @@ import config
 from utils.helpers import setup_logger, ensure_dirs
 from models.detector import get_model
 from preprocessing.transforms import get_val_transforms
+
+
+def get_eval_transform(model, model_name: str):
+    """
+    Returns the evaluation transform that matches how ``model`` was trained.
+
+    timm backbones are trained with their own native pipeline
+    (``resolve_data_config`` + ``create_transform``), which uses the model's
+    own crop_pct and interpolation. The generic torchvision resize used for
+    the hand-written backbones differs, and using it on a timm model changes
+    the scores measurably. So timm models get their native transform and
+    everything else keeps the torchvision one.
+    """
+    try:
+        import timm
+        from timm.data import resolve_data_config, create_transform
+
+        # Only treat it as a timm model if timm can actually build it.
+        timm.create_model(model_name, pretrained=False)
+        cfg = resolve_data_config(model.pretrained_cfg)
+        return create_transform(**cfg, is_training=False)
+    except Exception:
+        return get_val_transforms()
 from training.dataset import DeepfakeDataset
 
 
@@ -92,17 +115,19 @@ def evaluate_model(args):
         test_dir = Path(args.data_dir) / "test" if (Path(args.data_dir) / "test").exists() else Path(args.data_dir)
     
     # Load dataset with path information
-    test_transform = get_val_transforms()
-    test_dataset = DeepfakeDataset(test_dir, transform=test_transform, return_path=True)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    #
+    # The transform must match the one the model was TRAINED with. timm
+    # backbones use their native pipeline (resolve_data_config +
+    # create_transform), which differs from the generic torchvision resize in
+    # preprocessing.transforms.get_val_transforms - a different crop_pct and
+    # interpolation. Using the wrong one measurably changes the scores, so
+    # the model is built first and the transform derived from it.
+    device = torch.device(args.device)
 
     # Prepare logger
     log_path = Path(args.reports_dir) / "evaluation.log"
     logger = setup_logger("DeepfakeEvaluator", log_file=log_path)
     logger.info("Initializing Evaluation Routine...")
-    logger.info(f"Loaded {len(test_dataset)} test samples from {test_dir}")
-
-    device = torch.device(args.device)
 
     # Load Model
     logger.info(f"Loading checkpoint from {args.checkpoint}...")
@@ -111,6 +136,13 @@ def evaluate_model(args):
     model = get_model(model_name, num_classes=config.NUM_CLASSES, pretrained=False).to(device)
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
+
+    test_transform = get_eval_transform(model, model_name)
+    logger.info(f"Evaluation transform: {type(test_transform).__name__} for '{model_name}'")
+    test_dataset = DeepfakeDataset(test_dir, transform=test_transform, return_path=True)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+
+    logger.info(f"Loaded {len(test_dataset)} test samples from {test_dir}")
 
     y_true = []
     y_pred = []
@@ -245,10 +277,7 @@ def evaluate_model(args):
     device = torch.device(args.device)
 
     # Load dataset
-    test_transform = get_val_transforms()
     test_dir = Path(args.data_dir) / "test" if (Path(args.data_dir) / "test").exists() else Path(args.data_dir)
-    test_dataset = DeepfakeDataset(test_dir, transform=test_transform)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     logger.info(f"Loaded {len(test_dataset)} test samples from {test_dir}")
     if len(test_dataset) == 0:
@@ -262,6 +291,12 @@ def evaluate_model(args):
     model = get_model(model_name, num_classes=config.NUM_CLASSES, pretrained=False).to(device)
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
+
+    # Rebuild the dataset with the transform that matches training (see
+    # get_eval_transform).
+    test_transform = get_eval_transform(model, model_name)
+    test_dataset = DeepfakeDataset(test_dir, transform=test_transform)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     y_true = []
     y_pred = []

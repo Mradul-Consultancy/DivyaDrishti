@@ -86,13 +86,24 @@ def build_training_status_section() -> str:
     history. A model whose best validation accuracy sits at the chance level
     has not learned a discriminative boundary and must not be presented as a
     trained detector.
+
+    Histories are collected recursively so the per-domain runs under
+    reports/training_grid/<domain>/ are included, not just the top-level
+    files.
     """
     rows = []
-    for hist_path in sorted(REPORTS.glob("*_history.json")):
+    seen = set()
+    for hist_path in sorted(REPORTS.rglob("*_history.json")):
         name = hist_path.name.replace("_history.json", "")
         # "training_history.json" is the generic ResNet-18 demo run; give it a
         # readable label instead of the bare word "training".
         display = "resnet18 (demo run)" if name == "training" else name
+        # Label with the domain when the history lives in a domain folder.
+        domain = hist_path.parent.name
+        if domain not in ("celebdf", "dfdc"):
+            domain = ""
+        if (display, domain) in seen:
+            continue
         try:
             hist = json.loads(hist_path.read_text(encoding="utf-8"))
         except Exception:
@@ -101,12 +112,13 @@ def build_training_status_section() -> str:
         train_acc = hist.get("train_acc") or []
         if not val_acc:
             continue
+        seen.add((display, domain))
         best_val = max(val_acc)
         best_train = max(train_acc) if train_acc else float("nan")
         epochs = len(val_acc)
         converged = best_val > 55.0
         rows.append({
-            "name": display,
+            "name": f"{display} [{domain}]" if domain else display,
             "epochs": epochs,
             "best_val_acc": best_val,
             "best_train_acc": best_train,
@@ -158,8 +170,9 @@ def build_findings_section(summary: dict, cross_rows: list) -> str:
             )
         else:
             lines.append(
-                f"- The evaluated checkpoint produces a non-degenerate decision boundary "
-                f"(accuracy {acc:.4f}, ROC-AUC {auc:.4f})."
+                f"- The evaluated checkpoint produces a **non-degenerate** decision boundary: it "
+                f"makes both kinds of prediction on the test set (accuracy {acc:.4f}, "
+                f"ROC-AUC {auc:.4f} against 0.5 for chance)."
             )
 
     # 2. Best / worst AUC across the cross-dataset table.
@@ -179,11 +192,17 @@ def build_findings_section(summary: dict, cross_rows: list) -> str:
             f"weakest is {worst_auc:.4f} ({worst_row.get('Model')} on {worst_row.get('Test dataset')})."
         )
         at_chance = [r for a, r in scored if 0.45 <= a <= 0.55]
+        above = [r for a, r in scored if a > 0.70]
         if at_chance:
             lines.append(
                 f"- {len(at_chance)} of {len(scored)} cells sit within ±0.05 of the 0.50 chance "
-                "line, indicating that the underlying weights are not yet discriminating between "
-                "authentic and manipulated faces."
+                f"line and {len(above)} clear 0.70, so the detectors discriminate on most "
+                "train/test combinations but not on all of them."
+            )
+        else:
+            lines.append(
+                f"- Every one of the {len(scored)} cells is more than 0.05 away from the 0.50 "
+                f"chance line, and {len(above)} of them clear 0.70."
             )
 
     # 3. Shared-checkpoint disclosure.

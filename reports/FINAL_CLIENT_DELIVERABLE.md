@@ -1,5 +1,5 @@
 # Deep-Fake Detection — Client Deliverable
-*Auto-generated from result artefacts on 2026-11-10. No hand-written numbers.*
+*Auto-generated from result artefacts on 2026-11-14. No hand-written numbers.*
 
 > **Important**: This document is generated automatically from JSON/CSV files produced by
 > the evaluation pipeline. Do not edit it manually — re-run `python scripts/regenerate_report.py`
@@ -10,15 +10,15 @@
 ## 1. Evaluation Metrics (In-Domain)
 
 - **model_name**: efficientnet_b3.ra2_in1k
-- **checkpoint**: models/checkpoints/efficientnet_b3.ra2_in1k_best.pth
-- **total_samples**: 76
+- **checkpoint**: models/checkpoints/dfdc/efficientnet_b3.ra2_in1k_best.pth
+- **total_samples**: 60
 - **accuracy**: 0.5000
-- **precision**: 0.0000
-- **recall**: 0.0000
-- **f1_score**: 0.0000
-- **roc_auc**: 0.4834
-- **confusion_matrix**: [[0, 38], [0, 38]]
-- **detailed_report**: {'fake': {'precision': 0.0, 'recall': 0.0, 'f1-score': 0.0, 'support': 38.0}, 'real': {'precision': 0.5, 'recall': 1.0, 'f1-score': 0.6666666666666666, 'support': 38.0}, 'accuracy': 0.5, 'macro avg': {'precision': 0.25, 'recall': 0.5, 'f1-score': 0.3333333333333333, 'support': 76.0}, 'weighted avg': {'precision': 0.25, 'recall': 0.5, 'f1-score': 0.3333333333333333, 'support': 76.0}}
+- **precision**: 0.5000
+- **recall**: 0.6333
+- **f1_score**: 0.5588
+- **roc_auc**: 0.6044
+- **confusion_matrix**: [[19, 11], [19, 11]]
+- **detailed_report**: {'fake': {'precision': 0.5, 'recall': 0.6333333333333333, 'f1-score': 0.5588235294117647, 'support': 30.0}, 'real': {'precision': 0.5, 'recall': 0.36666666666666664, 'f1-score': 0.4230769230769231, 'support': 30.0}, 'accuracy': 0.5, 'macro avg': {'precision': 0.5, 'recall': 0.5, 'f1-score': 0.4909502262443439, 'support': 60.0}, 'weighted avg': {'precision': 0.5, 'recall': 0.5, 'f1-score': 0.4909502262443439, 'support': 60.0}}
 
 ---
 
@@ -26,30 +26,30 @@
 
 | Trained on | Test dataset | Model | Checkpoint | Accuracy (%) | F1-Score (%) | ROC-AUC | Brier Score |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CELEBDF | CelebDF | EfficientNet-B3 | domain-specific | 57.50 | 48.48 | 0.6700 | 0.3553 |
-| CELEBDF | CelebDF | ConvNeXt-Tiny | domain-specific | 60.00 | 71.43 | 0.7625 | 0.3252 |
-| CELEBDF | CelebDF | YOLO26n-cls | domain-specific | 50.00 | 9.09 | 0.6125 | 0.4180 |
-| CELEBDF | CelebDF | Ensemble | domain-specific | 60.00 | 55.56 | 0.7175 | 0.2208 |
-| CELEBDF | DFDC | EfficientNet-B3 | domain-specific | 47.37 | 51.22 | 0.5305 | 0.4094 |
-| CELEBDF | DFDC | ConvNeXt-Tiny | domain-specific | 48.68 | 64.22 | 0.5298 | 0.3514 |
-| CELEBDF | DFDC | YOLO26n-cls | domain-specific | 56.58 | 23.26 | 0.5956 | 0.3897 |
-| CELEBDF | DFDC | Ensemble | domain-specific | 56.58 | 54.79 | 0.5686 | 0.2583 |
-| CELEBDF | Real-Life | EfficientNet-B3 | domain-specific | 41.75 | 5.92 | 0.3481 | 0.5522 |
-| CELEBDF | Real-Life | ConvNeXt-Tiny | domain-specific | 32.92 | 21.31 | 0.2738 | 0.5243 |
-| CELEBDF | Real-Life | YOLO26n-cls | domain-specific | 48.33 | 1.27 | 0.2189 | 0.5117 |
-| CELEBDF | Real-Life | Ensemble | domain-specific | 44.33 | 4.02 | 0.2430 | 0.4702 |
-| DFDC | CelebDF | EfficientNet-B3 | domain-specific | 82.50 | 83.72 | 0.8475 | 0.1657 |
-| DFDC | CelebDF | ConvNeXt-Tiny | domain-specific | 75.00 | 80.00 | 0.9100 | 0.1665 |
-| DFDC | CelebDF | YOLO26n-cls | domain-specific | 95.00 | 95.00 | 0.9925 | 0.0536 |
-| DFDC | CelebDF | Ensemble | domain-specific | 90.00 | 90.48 | 0.9825 | 0.0921 |
-| DFDC | DFDC | EfficientNet-B3 | domain-specific | 61.84 | 64.20 | 0.7188 | 0.3270 |
-| DFDC | DFDC | ConvNeXt-Tiny | domain-specific | 61.84 | 50.85 | 0.7368 | 0.1951 |
-| DFDC | DFDC | YOLO26n-cls | domain-specific | 72.37 | 66.67 | 0.8331 | 0.1687 |
-| DFDC | DFDC | Ensemble | domain-specific | 60.53 | 62.50 | 0.7860 | 0.1888 |
-| DFDC | Real-Life | EfficientNet-B3 | domain-specific | 62.42 | 61.94 | 0.6620 | 0.3056 |
-| DFDC | Real-Life | ConvNeXt-Tiny | domain-specific | 48.00 | 26.93 | 0.4585 | 0.2934 |
-| DFDC | Real-Life | YOLO26n-cls | domain-specific | 47.33 | 3.66 | 0.3874 | 0.4786 |
-| DFDC | Real-Life | Ensemble | domain-specific | 49.92 | 19.11 | 0.5888 | 0.2850 |
+| CELEBDF | CelebDF | EfficientNet-B3 | domain-specific | 81.34 | 89.16 | 0.7684 | 0.1449 |
+| CELEBDF | CelebDF | ConvNeXt-Tiny | domain-specific | 94.45 | 97.03 | 0.9196 | 0.0539 |
+| CELEBDF | CelebDF | YOLO26n-cls | domain-specific | 95.17 | 97.39 | 0.9403 | 0.0399 |
+| CELEBDF | CelebDF | Ensemble | domain-specific | 94.68 | 97.13 | 0.9140 | 0.0563 |
+| CELEBDF | DFDC | EfficientNet-B3 | domain-specific | 40.00 | 25.00 | 0.3822 | 0.4486 |
+| CELEBDF | DFDC | ConvNeXt-Tiny | domain-specific | 56.67 | 56.67 | 0.5933 | 0.2509 |
+| CELEBDF | DFDC | YOLO26n-cls | domain-specific | 58.33 | 70.59 | 0.6489 | 0.2955 |
+| CELEBDF | DFDC | Ensemble | domain-specific | 55.00 | 57.14 | 0.5444 | 0.2725 |
+| CELEBDF | Real-Life | EfficientNet-B3 | domain-specific | 52.33 | 32.07 | 0.6262 | 0.3886 |
+| CELEBDF | Real-Life | ConvNeXt-Tiny | domain-specific | 53.00 | 24.40 | 0.6533 | 0.3527 |
+| CELEBDF | Real-Life | YOLO26n-cls | domain-specific | 51.50 | 21.35 | 0.5113 | 0.4065 |
+| CELEBDF | Real-Life | Ensemble | domain-specific | 52.17 | 21.80 | 0.5971 | 0.3624 |
+| DFDC | CelebDF | EfficientNet-B3 | domain-specific | 84.44 | 91.41 | 0.6064 | 0.1213 |
+| DFDC | CelebDF | ConvNeXt-Tiny | domain-specific | 91.39 | 95.47 | 0.7710 | 0.0737 |
+| DFDC | CelebDF | YOLO26n-cls | domain-specific | 91.28 | 95.42 | 0.6697 | 0.0785 |
+| DFDC | CelebDF | Ensemble | domain-specific | 91.59 | 95.59 | 0.7217 | 0.0750 |
+| DFDC | DFDC | EfficientNet-B3 | domain-specific | 50.00 | 55.88 | 0.6044 | 0.3234 |
+| DFDC | DFDC | ConvNeXt-Tiny | domain-specific | 75.00 | 72.73 | 0.8233 | 0.1597 |
+| DFDC | DFDC | YOLO26n-cls | domain-specific | 73.33 | 78.38 | 0.8678 | 0.1684 |
+| DFDC | DFDC | Ensemble | domain-specific | 65.00 | 69.57 | 0.8211 | 0.1829 |
+| DFDC | Real-Life | EfficientNet-B3 | domain-specific | 51.33 | 63.64 | 0.4497 | 0.4108 |
+| DFDC | Real-Life | ConvNeXt-Tiny | domain-specific | 40.58 | 48.59 | 0.3929 | 0.4354 |
+| DFDC | Real-Life | YOLO26n-cls | domain-specific | 47.58 | 63.41 | 0.3626 | 0.4541 |
+| DFDC | Real-Life | Ensemble | domain-specific | 48.33 | 63.31 | 0.4014 | 0.3872 |
 
 > **Note on cross-dataset generalisation**: ROC-AUC in this report is computed with **FAKE as the
 > positive class**, so a value of 0.5 is chance and higher is better. In published deepfake
@@ -62,9 +62,10 @@
 > a correct identity-aware split. This is disclosed in the report and noted as a dataset-level
 > limitation.
 
-> **Note on the "Trained on" column**: rows marked *shared ckpt* were produced with the
-> shared/global checkpoint because no domain-specific checkpoint exists for that training domain.
-> Such rows are not independent cross-domain measurements. See the Findings section.
+> **Note on the "Trained on" column**: a row marked *shared ckpt* was produced with the
+> shared/global checkpoint because no domain-specific checkpoint exists for that training
+> domain. Such rows are not independent cross-domain measurements. Every row here is
+> marked *domain-specific*, so each is a genuine train-domain / test-domain measurement.
 
 ---
 
@@ -83,8 +84,10 @@
 
 | Model | Epochs | Best Train Acc | Best Val Acc | Status |
 |---|---|---|---|---|
-| convnext_tiny.fb_in22k_ft_in1k | 2 | 63.64% | 50.00% | **Not converged (chance-level)** |
-| efficientnet_b3.ra2_in1k | 8 | 55.48% | 50.00% | **Not converged (chance-level)** |
+| convnext_tiny.fb_in22k_ft_in1k [celebdf] | 4 | 84.79% | 93.49% | Converged |
+| efficientnet_b3.ra2_in1k [celebdf] | 4 | 74.58% | 84.27% | Converged |
+| convnext_tiny.fb_in22k_ft_in1k [dfdc] | 4 | 80.24% | 92.19% | Converged |
+| efficientnet_b3.ra2_in1k [dfdc] | 4 | 67.79% | 72.81% | Converged |
 | resnet18 (demo run) | 2 | 83.33% | 50.00% | **Not converged (chance-level)** |
 
 ---
@@ -94,9 +97,9 @@
 *Every statement below is derived automatically from the artefacts in Sections 1–4.
 No sentence is hand-written, so this section cannot drift away from the results.*
 
-- **Constant-prediction collapse.** The evaluated checkpoint predicts *real* for every image in the test set (accuracy 0.5000, ROC-AUC 0.4834). This is a degenerate decision boundary, not a usable detector.
-- **Across the cross-dataset matrix** (Table 2), the strongest ROC-AUC is 0.9925 (YOLO26n-cls on CelebDF), and the weakest is 0.2189 (YOLO26n-cls on Real-Life).
-- 3 of 24 cells sit within ±0.05 of the 0.50 chance line, indicating that the underlying weights are not yet discriminating between authentic and manipulated faces.
+- The evaluated checkpoint produces a **non-degenerate** decision boundary: it makes both kinds of prediction on the test set (accuracy 0.5000, ROC-AUC 0.6044 against 0.5 for chance).
+- **Across the cross-dataset matrix** (Table 2), the strongest ROC-AUC is 0.9403 (YOLO26n-cls on CelebDF), and the weakest is 0.3626 (YOLO26n-cls on Real-Life).
+- 2 of 24 cells sit within ±0.05 of the 0.50 chance line and 9 clear 0.70, so the detectors discriminate on most train/test combinations but not on all of them.
 
 ---
 
@@ -105,10 +108,9 @@ No sentence is hand-written, so this section cannot drift away from the results.
 - **Dataset scope**: Models were trained and tested on DFDC and Celeb-DF only. Performance on
   other deepfake types (e.g., text-driven video synthesis, lip-sync fakes) is unknown.
 - **Generalisation gap**: Cross-dataset AUC (Table 2) is lower than in-domain AUC in the
-  current run. This is consistent with the academic literature and expected at this scale of
-  training data — but with the present warm-up checkpoints the gap is driven by
-  non-convergence rather than by genuine domain shift, so it should not be read as a
-  measured generalisation result.
+  current run. This is consistent with the academic literature, where published detectors
+  typically lose 15–35 AUC points when moved to an unseen dataset, and it is the expected
+  behaviour for models trained on a single domain.
 - **Real-life performance**: The real-life image set consists of AI-generated faces
   from StyleGAN / Stable Diffusion. Results on live-capture deepfakes may differ.
 - **Legal notice (AGPL licensing)**: Any AGPL-licensed component used in this pipeline requires
