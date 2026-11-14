@@ -22,7 +22,11 @@ if str(ROOT_DIR) not in sys.path:
 import config
 from models.detector import get_model
 from preprocessing.face_extractor import FaceExtractor
-from preprocessing.transforms import get_inference_transforms
+from evaluation.evaluate import get_eval_transform
+
+# Standard ImageFolder alphabetical sorting: 'fake' = 0, 'real' = 1
+FAKE_CLASS_IDX = config.FAKE_LABEL_IDX  # 0
+REAL_CLASS_IDX = config.REAL_LABEL_IDX  # 1
 
 st.set_page_config(
     page_title="DivyaDrishti AI — Deepfake Detection",
@@ -68,12 +72,11 @@ st.markdown("""
 def load_detector_model(model_name: str, checkpoint_path: str):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not os.path.exists(checkpoint_path):
-        return None, device
+        return None, None, device
     try:
         model = get_model(model_name=model_name, num_classes=2, pretrained=False)
         checkpoint = torch.load(checkpoint_path, map_location=device)
         
-        # Unpack state_dict prioritizing 'state_dict' then 'model_state_dict'
         if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
         elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -81,19 +84,16 @@ def load_detector_model(model_name: str, checkpoint_path: str):
         else:
             state_dict = checkpoint
 
-        # Strip 'module.' prefix if trained with DataParallel
-        clean_state_dict = {}
-        for k, v in state_dict.items():
-            key = k.replace("module.", "")
-            clean_state_dict[key] = v
-
+        clean_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         model.load_state_dict(clean_state_dict)
         model.to(device)
         model.eval()
-        return model, device
+
+        transform = get_eval_transform(model, model_name)
+        return model, transform, device
     except Exception as e:
         st.error(f"Error loading model weights: {e}")
-        return None, device
+        return None, None, device
 
 
 @st.cache_resource
@@ -111,13 +111,17 @@ def main():
     checkpoints_dir = config.CHECKPOINT_DIR
 
     model_options = {
-        "EfficientNet-B3 (Recommended - AUC 0.925)": {
-            "name": "efficientnet_b3.ra2_in1k",
-            "file": "efficientnet_b3.ra2_in1k_best.pth"
+        "ConvNeXt-Tiny (CelebDF Tuned - Best Discrimination)": {
+            "name": "convnext_tiny.fb_in22k_ft_in1k",
+            "file": "celebdf/convnext_tiny.fb_in22k_ft_in1k_best.pth"
         },
-        "ConvNeXt-Tiny (High Robustness)": {
+        "ConvNeXt-Tiny (General Purpose Backbone)": {
             "name": "convnext_tiny.fb_in22k_ft_in1k",
             "file": "convnext_tiny.fb_in22k_ft_in1k_best.pth"
+        },
+        "EfficientNet-B3 (In-Domain Checkpoint)": {
+            "name": "efficientnet_b3.ra2_in1k",
+            "file": "efficientnet_b3.ra2_in1k_best.pth"
         },
         "ResNet-18 (Lightweight Baseline)": {
             "name": "resnet18",
@@ -130,17 +134,24 @@ def main():
     ckpt_path = str(checkpoints_dir / model_cfg["file"])
 
     if not os.path.exists(ckpt_path):
-        st.sidebar.warning(f"⚠️ Checkpoint `{model_cfg['file']}` not found in `models/checkpoints/`.")
+        st.sidebar.warning(f"⚠️ Checkpoint `{model_cfg['file']}` not found.")
         st.sidebar.info("Download pre-trained weights from GitHub Releases v1.0.0.")
     else:
-        st.sidebar.success(f"✅ Loaded checkpoint: `{model_cfg['file']}`")
+        st.sidebar.success(f"✅ Loaded: `{Path(model_cfg['file']).name}`")
 
     threshold = st.sidebar.slider("Classification Threshold (Fake %)", min_value=10, max_value=90, value=50, step=5) / 100.0
 
+    # Quick Samples Loader in Sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🧪 Quick Test Samples")
+    sample_choice = st.sidebar.radio(
+        "Load Pre-packaged Test Sample",
+        ["None (Custom Upload)", "Real Sample (CelebDF Real Face)", "Fake Sample (CelebDF Synthetic Face)"]
+    )
+
     # Initialize modules
     extractor = get_face_extractor()
-    transform = get_inference_transforms(image_size=config.IMAGE_SIZE)
-    model, device = load_detector_model(model_cfg["name"], ckpt_path)
+    model, transform, device = load_detector_model(model_cfg["name"], ckpt_path)
 
     # Tabs
     tab1, tab2 = st.tabs(["📸 Image Detection", "🎥 Video Inspection"])
@@ -150,27 +161,43 @@ def main():
         st.subheader("Upload an Image for Analysis")
         uploaded_image = st.file_uploader("Select JPG, PNG, or WEBP image", type=["jpg", "jpeg", "png", "webp"])
 
-        if uploaded_image:
+        # Determine active image source
+        img_pil = None
+        source_desc = ""
+
+        if uploaded_image is not None:
+            img_pil = Image.open(uploaded_image).convert("RGB")
+            source_desc = "Uploaded Custom Image"
+        elif sample_choice == "Real Sample (CelebDF Real Face)":
+            real_sample_path = "data/processed/celebdf/test/real/00170_f00000_face0.jpg"
+            if os.path.exists(real_sample_path):
+                img_pil = Image.open(real_sample_path).convert("RGB")
+                source_desc = "CelebDF Authentic Subject (Expected: REAL)"
+        elif sample_choice == "Fake Sample (CelebDF Synthetic Face)":
+            fake_sample_path = "data/processed/celebdf/test/fake/id0_id16_0000_f00000_face0.jpg"
+            if os.path.exists(fake_sample_path):
+                img_pil = Image.open(fake_sample_path).convert("RGB")
+                source_desc = "CelebDF Manipulated Face (Expected: FAKE)"
+
+        if img_pil is not None:
             col1, col2 = st.columns([1, 1])
             with col1:
-                img_pil = Image.open(uploaded_image).convert("RGB")
-                st.image(img_pil, caption="Source Image", use_container_width=True)
+                st.image(img_pil, caption=source_desc, use_container_width=True)
 
             with col2:
-                if model is None:
+                if model is None or transform is None:
                     st.error("Please ensure the selected model checkpoint exists.")
                 else:
                     with st.spinner("Detecting facial bounding box and evaluating forgery indicators..."):
-                        # Extract face
                         face_crop = extractor.extract_face(img_pil)
-                        st.image(face_crop, caption="Cropped Facial Area", width=180)
+                        st.image(face_crop, caption="Analyzed Facial Region", width=180)
 
-                        # Inference
                         tensor = transform(face_crop).unsqueeze(0).to(device)
                         with torch.no_grad():
                             outputs = model(tensor)
                             probs = torch.softmax(outputs, dim=1).squeeze(0)
-                            prob_fake = float(probs[1].item())
+                            prob_fake = float(probs[FAKE_CLASS_IDX].item())
+                            prob_real = float(probs[REAL_CLASS_IDX].item())
 
                         is_fake = prob_fake >= threshold
 
@@ -182,7 +209,8 @@ def main():
                             st.markdown(
                                 f'<div class="verdict-box verdict-fake">'
                                 f'🚨 <b>VERDICT: SYNTHETIC / DEEPFAKE DETECTED</b><br>'
-                                f'Fake Probability: {prob_pct:.2f}% (Threshold: {threshold*100:.0f}%)'
+                                f'Fake Probability: {prob_pct:.2f}% (Threshold: {threshold*100:.0f}%)<br>'
+                                f'Authentic Probability: {prob_real*100:.2f}%'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
@@ -190,7 +218,8 @@ def main():
                             st.markdown(
                                 f'<div class="verdict-box verdict-real">'
                                 f'✅ <b>VERDICT: AUTHENTIC / REAL MEDIA</b><br>'
-                                f'Real Probability: {100.0 - prob_pct:.2f}% (Fake Probability: {prob_pct:.2f}%)'
+                                f'Authentic Probability: {prob_real*100:.2f}%<br>'
+                                f'Fake Probability: {prob_pct:.2f}% (Threshold: {threshold*100:.0f}%)'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
@@ -212,14 +241,14 @@ def main():
                 st.video(video_path)
 
             with col_v2:
-                if model is None:
+                if model is None or transform is None:
                     st.error("Checkpoint required for inference.")
                 else:
                     if st.button("🚀 Analyze Video Frames"):
                         with st.spinner("Sampling video frames and running neural verification..."):
                             cap = cv2.VideoCapture(video_path)
                             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                            step = max(1, total_frames // 15)  # Sample ~15 frames
+                            step = max(1, total_frames // 15)
                             
                             scores = []
                             current = 0
@@ -237,7 +266,7 @@ def main():
                                     with torch.no_grad():
                                         outputs = model(tensor)
                                         probs = torch.softmax(outputs, dim=1).squeeze(0)
-                                        scores.append(float(probs[1].item()))
+                                        scores.append(float(probs[FAKE_CLASS_IDX].item()))
                                 current += 1
                             cap.release()
 
