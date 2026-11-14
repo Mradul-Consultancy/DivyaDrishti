@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # 1. Interactive Web Studio (Streamlit)
+  web-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: divyadrishti-web-ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./models/checkpoints:/app/models/checkpoints
+      - ./reports:/app/reports
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+
+  # 2. Production Enterprise REST API (FastAPI)
+  rest-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: divyadrishti-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models/checkpoints:/app/models/checkpoints
+      - ./reports:/app/reports
+    command: ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
