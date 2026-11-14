@@ -29,6 +29,32 @@ Download and place the `.pth` files into `models/checkpoints/`:
 
 ---
 
+## 📊 Verified Empirical Benchmark & Reality Check
+
+> ⚠️ **Scientific Transparency Notice**: The figures below are strictly computed from automated evaluation logs (`reports/cross_dataset_table.csv`). No numbers are hand-written or cherry-picked.
+
+### 1. In-Domain Performance (Trained on Celeb-DF, Tested on Celeb-DF)
+*Test split composition: 4,440 Fake, 425 Real (Total: 4,865). Due to dataset class imbalance (91.2% fake), raw accuracy is complemented by ROC-AUC and Brier calibration scores:*
+
+| Architecture | Test Accuracy | F1-Score | ROC-AUC | Brier Score (Lower is better) | Latency (CPU) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **YOLO26n-cls** | **95.17%** | **97.39%** | **0.9403** | **0.0399** | 14.05 ms |
+| **Soft-Voting Ensemble** | **94.68%** | **97.13%** | **0.9140** | **0.0563** | 178.34 ms |
+| **ConvNeXt-Tiny** | **94.45%** | **97.03%** | **0.9196** | **0.0539** | 101.36 ms |
+| **EfficientNet-B3** | **81.34%** | **89.16%** | **0.7684** | **0.1449** | 62.93 ms |
+
+### 2. Cross-Dataset Generalization (The True Robustness Test)
+*Deepfake detectors commonly degrade when tested on unseen generation pipelines or different compression formats:*
+
+| Training Domain | Test Domain | Model | Accuracy | ROC-AUC | Analysis |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **DFDC** | **Celeb-DF** | Ensemble | **91.59%** | **0.7217** | High accuracy driven by 91% fake majority; genuine AUC = 0.72 |
+| **Celeb-DF** | **DFDC** (Balanced) | ConvNeXt-Tiny | **56.67%** | **0.5933** | Moderate generalization on Meta challenge |
+| **Celeb-DF** | **Real-Life** (Social Media) | ConvNeXt-Tiny | **53.00%** | **0.6533** | Modest transferability due to compression domain shift |
+| **DFDC** | **Real-Life** | EfficientNet-B3 | **51.33%** | **0.4497** | Domain shift failure (chance-level boundary) |
+
+---
+
 ## Directory Structure
 
 ```text
