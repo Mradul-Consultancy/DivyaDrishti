@@ -4,6 +4,31 @@
 
 ---
 
+## 🚀 Quick Launch: Interactive Web App (Streamlit)
+
+Launch the interactive web UI for drag-and-drop deepfake inspection on images and videos:
+
+```bash
+streamlit run app.py
+```
+- **Real-time Face Cropping**: Automatically identifies, extracts, and centers faces.
+- **Deepfake Probability Bar**: Clear probability breakdown and REAL/FAKE verdict.
+- **Frame-by-Frame Video Inspection**: Samples frames across video timelines to detect temporal deepfake manipulation.
+
+---
+
+## 📥 Pre-Trained Model Weights (GitHub Releases)
+
+Pre-trained model checkpoints are hosted on GitHub Releases:
+👉 **[Download DivyaDrishti v1.0.0 Model Checkpoints](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/tag/v1.0.0)**
+
+Download and place the `.pth` files into `models/checkpoints/`:
+- [`efficientnet_b3.ra2_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/efficientnet_b3.ra2_in1k_best.pth) *(123 MB — Recommended)*
+- [`convnext_tiny.fb_in22k_ft_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/convnext_tiny.fb_in22k_ft_in1k_best.pth) *(318 MB — High Robustness)*
+- [`resnet18_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/resnet18_best.pth) *(128 MB — Lightweight Baseline)*
+
+---
+
 ## Directory Structure
 
 ```text
