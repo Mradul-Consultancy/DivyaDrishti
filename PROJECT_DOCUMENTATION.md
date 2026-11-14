@@ -169,7 +169,7 @@ tests/                                      <- Automated regression tests
    - Executed and validated full demo pipeline.
 
 2. **Phase 2: Video Extraction & MTCNN Cropping (By-Video Splitting)**
-   - Installed `facenet-pytorch` without downgrading environment PyTorch 2.14.
+   - Installed `facenet-pytorch` without downgrading the environment's PyTorch.
    - Implemented `preprocessing/extract_faces_from_videos.py`:
      - Extracts $N$ evenly spaced frames across video duration with OpenCV.
      - Detects and crops faces using MTCNN with proportional margin padding (20%).
@@ -257,12 +257,14 @@ tests/                                      <- Automated regression tests
 
 10. **Phase 10: Documentation Accuracy & Brier Score Calibration**
     - **Unverified architecture claims removed**: The YOLO26n-cls checkpoint *does* contain `C3k2`, `C3k`, and `C2PSA` blocks (confirmed by introspecting `YOLO('yolo26n-cls.pt').model`), but the backbone is NOT "CSPDarkNet" — that term names YOLOv5/v8's backbone. The docs now say "Lightweight classification model loaded via Ultralytics" and avoid naming the backbone architecture. All references to "CSPDarkNet" have been removed from `PROJECT_DOCUMENTATION.md` and from the architecture audit artifact.
-    - **Dataset name claims corrected**: Replaced "FaceForensics++ contains Deepfakes, Face2Face, FaceSwap, NeuralTextures" in `README.md` with a factual "Dataset Compatibility" section noting the pipeline ships parsers for FF++, Celeb-DF, and DFDC but the local dataset is synthetic.
+    - **Dataset name claims corrected**: Replaced "FaceForensics++ contains Deepfakes, Face2Face, FaceSwap, NeuralTextures" in `README.md` with a factual "Dataset Compatibility" section listing the benchmarks actually present locally (Celeb-DF v2, DFDC, and the Real-Life in-the-wild set) and the parsers shipped for FF++.
     - **Brier Score added as calibration metric**:
       - Formula: $BS = \frac{1}{N}\sum_{i=1}^{N}(p_i - y_i)^2$ where $p_i$ is predicted P(fake) and $y_i \in \{0,1\}$.
       - A perfect oracle scores 0.0; a uniform random classifier scores 0.25. Scores > 0.25 indicate worse-than-random calibration.
       - Added to `evaluate_ensemble.py` (computed per model and ensemble, stored in `ensemble_metrics.json`), `generate_reports.py` (Brier column in `results_table.md`), and printed in ASCII summary table.
-      - Measured on the synthetic test set (24 samples): YOLO=0.2405, ConvNeXt=0.2380, EfficientNet=0.4171 (worse than random on synthetic data), Ensemble (Brier-tuned)=0.2322.
+      - Measured on the current DFDC test split (60 samples, EfficientNet-B3): Brier = 0.3234
+        (see `reports/cross_dataset_table.csv`). Per-model Brier scores for the full matrix are
+        in the `Brier Score` column of that file.
     - **Tests** — [`tests/test_calibration.py`](file:///e:/deepfake/tests/test_calibration.py): 3 tests: Brier score is in `[0,1]`, saved predictions have valid probability columns, `ensemble_metrics.json` contains `brier_score`. All pass.
 
 11. **Phase 11: Real Data Acquisition & Automated DFDC Ingestion Pipeline**
@@ -273,9 +275,56 @@ tests/                                      <- Automated regression tests
       - Automatically partitions acquired videos into `data/raw_videos/real/` and `data/raw_videos/fake/`.
       - Generates or updates `data/raw_videos/metadata.json` preserving original source video pointers.
     - **Master CLI Command**: Exposed via `python main.py download-dfdc` with options `--max-videos`, `--source {dataset, competition}`, and `--output-dir`.
-    - **Real-World Video Verification**: Acquired real 1080×1920 full-HD videos from DFDC; validated MTCNN facial detection achieves >99.99% confidence on real human actors.
+    - **Real-World Video Verification**: Acquired real full-HD videos from DFDC and Celeb-DF v2. The measured face-detection yield is recorded per dataset in the extraction manifest: Celeb-DF v2 sampled 31,141 frames from 6,229 videos and saved 31,141 face crops (8 frames dropped, 0.03%); DFDC sampled 2,120 frames from 212 videos and saved 2,120 crops (162 dropped, 7.64%). Both figures come from `data/processed/<domain>/video_split_manifest.json`.
     - **Zero-Leakage Audit**: Verified with `python main.py verify-leakage --metadata-file data/raw_videos/metadata.json` (PASSED: 0 source or identity cross-contamination across splits).
     - **Tests** — [`tests/test_dfdc_downloader.py`](file:///e:/deepfake/tests/test_dfdc_downloader.py): 4 tests covering credential checking, zip extraction, folder parsing, and paired source preservation. All pass.
+
+12. **Phase 12: Metric Correctness, Real Training & Verified Deliverable** *(2026-11-10 to 2026-11-14)*
+
+    The client deliverable was rebuilt on measurements rather than on the warm-up checkpoints
+    that were present when this document was first written. Everything below is reproduced by
+    `pytest tests/` and by the artefacts under `reports/`.
+
+    - **Inverted ROC-AUC corrected** (`scripts/build_cross_table.py`): the engine computed
+      `roc_auc_score(y_true, prob_fake)` with sklearn's default `pos_label=1` (REAL) against a
+      P(fake) score, so every reported AUC was `1 - true_AUC`. Celeb-DF EfficientNet-B3 was
+      reported as 0.1850; the true value is 0.8150. Metric computation is now centralised in
+      `_compute_metrics()`, which uses `roc_curve(..., pos_label=FAKE_LABEL_IDX)` and matches
+      `evaluation/evaluate_ensemble.py`.
+    - **Inverted predictions corrected**: `y_pred = (probs >= 0.5).astype(int)` mapped a high
+      P(fake) to label 1 (REAL), transposing every confusion matrix and corrupting
+      precision/recall/F1. The decision rule is now
+      `np.where(probs >= threshold, FAKE_LABEL_IDX, REAL_LABEL_IDX)`.
+    - **Hardcoded metric cache deleted**: a literal `_EVAL_CACHE` dict shipped fabricated
+      numbers for the Real-Life set that matched no actual run. All numbers are now measured.
+    - **Ensemble sample alignment fixed**: the YOLO branch built its file list in
+      `["real", "fake"]` order while the timm branches used DeepfakeDataset's alphabetical
+      order, so the soft-voting average paired each image's YOLO probability with a different
+      image's timm probabilities. Both branches now share `_collect_samples()`.
+    - **Evaluation transform fixed** (`evaluation/evaluate.py`): the generic torchvision
+      resize was applied to timm backbones, which are trained with their native pipeline. The
+      same checkpoint scored AUC 0.3956 with the timm transform and 0.5389 with the torchvision
+      one; `get_eval_transform()` now derives the transform from the model, and the single-model
+      evaluation and the cross-dataset table now agree exactly (0.6044 for the DFDC
+      EfficientNet-B3 checkpoint).
+    - **`saved_predictions.csv` collision fixed**: `evaluate.py` and `evaluate_ensemble.py` wrote
+      the same path with different schemas, so whichever ran last won. `evaluate.py` now writes
+      `saved_predictions_single.csv`.
+    - **`identity_primary` split mode added** (`preprocessing/split_by_identity.py`): Celeb-DF
+      v2's swap graph chains all 59 identities into 4 giant components, so the official test
+      list swallowed the whole dataset and train/val came out empty. The new mode groups by
+      primary identity, keeps the donor relationship recorded, and reports the residual
+      donor-identity overlap as advisory. Primary-identity overlap remains fatal in every mode.
+    - **Offline support**: `facenet-pytorch` was imported at module level and broke every
+      trainer wherever it was absent; the import is now optional. `ultralytics`,
+      `facenet-pytorch` and the ImageNet weights are vendored so the Kaggle sandbox (no
+      internet, no Hub access) can train all three backbones.
+    - **Real training completed**: Celeb-DF v2 (6,229 videos) and DFDC (212 videos) were
+      extracted and trained per domain, giving 6 converged per-domain checkpoints and a
+      24-cell cross-dataset matrix in which every row is `domain-specific`.
+    - **Deliverable provenance enforced** (`tests/test_deliverable_provenance.py`): every
+      number in `reports/FINAL_CLIENT_DELIVERABLE.md` must appear in the artefact it came
+      from; editing the document by hand fails the suite.
 
 ---
 
@@ -367,24 +416,41 @@ tests/                                      <- Automated regression tests
 
 ## 6. Project Verification Summary
 
+Every figure below is a measured value taken from a generated artefact. The
+per-run numbers live in `reports/` (cross-dataset table, evaluation summary,
+speed table, per-domain training histories); the client deliverable
+`reports/FINAL_CLIENT_DELIVERABLE.md` is regenerated from them and is checked
+by `tests/test_deliverable_provenance.py`, which fails if any number in it is
+not present in the artefact it came from.
+
 | Pipeline Stage | Target / Artifact | Status | Verification Evidence |
 |---|---|:---:|---|
-| **Environment** | Dependencies | PASSED | `torch 2.14`, `ultralytics 8.4`, `timm 1.0`, `facenet-pytorch 2.6`, `opencv` |
-| **Video Extraction** | `extract_faces_from_videos.py` | PASSED | 6 test videos processed $\rightarrow$ 30 face crops $\rightarrow$ zero-leakage manifest |
-| **YOLO Training** | `train_yolo.py` (yolo26n-cls) | PASSED | Pretrained weights loaded, weighted loss injected, trained, checkpoint saved |
-| **ConvNeXt Training** | `train_convnext_effnet.py convnext` | PASSED | Fine-tuned 27.8M parameter model, saved `convnext_tiny.*_best.pth` |
-| **EfficientNet Training**| `train_convnext_effnet.py effnet` | PASSED | Fine-tuned 10.7M parameter model, saved `efficientnet_b3.*_best.pth` |
-| **Ensemble Evaluation** | `evaluate_ensemble.py` | PASSED | Evaluated on 24 test images, generated ROC curves & 2x2 confusion matrix |
-| **Robustness Benchmark** | `robustness_test.py` | PASSED | Benchmarked JPEG (80, 50, 20), Blur (1.5, 3.0), Resize (60%, 30%), Combined |
-| **Results Generator** | `generate_reports.py` | PASSED | Generated `results_table.md`, `roc_plots.png`, `precision_recall_curves.png` |
-| **Cross-Dataset Engine**| `evaluate_cross_dataset.py` | PASSED | Evaluated across Celeb-DF, DFDC, and Real-Life domains with Markdown/PNG reports |
-| **Label Mapping Tests** | `tests/test_label_mapping.py` | PASSED | 6/6 tests: `fake=0, real=1` enforced across ImageFolder, YOLO, timm, and reports |
-| **Identity Split Tests** | `tests/test_identity_split.py` | PASSED | 10/10 tests: Union-Find, cluster assignment, benchmark parsers, leakage detection |
-| **Leakage Tests** | `tests/test_leakage.py` | PASSED | 3/3 tests: on-disk manifest audit + intentional leakage injection fails |
-| **Drop Frame Tests** | `tests/test_drop_frames.py` | PASSED | 3/3 tests: blank frame detection, fallback crop, drop stats in manifest |
-| **Calibration Tests** | `tests/test_calibration.py` | PASSED | 3/3 tests: Brier bounds, probability CSV validity, ensemble_metrics.json |
-| **JPEG Augmentation Tests** | `tests/test_jpeg_augmentation.py` | PASSED | 15/15 tests: stochastic JPEG compression, quality limits, pipeline order |
-| **DFDC Downloader Tests** | `tests/test_dfdc_downloader.py` | PASSED | 4/4 tests: Kaggle auth checking, zip extraction, paired source preservation |
-| **Cross-Dataset Tests** | `tests/test_cross_dataset.py` | PASSED | 11/11 tests: Celeb-DF, DFDC, Real-Life directory structure, resolver, and reporting |
-| **Full Test Suite** | `pytest tests/` | PASSED | **55/55 tests in ~11s** (Windows, Python 3.12.10) |
+| **Environment** | Dependencies | PASSED | `torch 2.9.1+cu128`, `ultralytics 8.4.203`, `timm 1.0.31`, `facenet-pytorch 2.6`, `opencv 5.0.0` |
+| **Celeb-DF Acquisition** | `scripts/download_celebrity_df.py` | PASSED | 9.29 GB / 6,229 videos (590 real, 5,639 synthesis) from `reubensuju/celeb-df-v2` |
+| **Video Extraction** | `extract_faces_from_videos.py` | PASSED | 31,141 Celeb-DF face crops + 2,120 DFDC crops; zero-leakage manifest; identity-disjoint splits |
+| **Identity Split** | `split_by_identity.py` | PASSED | 59 primary-identity clusters for Celeb-DF; `zero_leakage_guaranteed: True`; donor-identity overlap measured and disclosed |
+| **YOLO Training** | `train_yolo.py` (yolo26n-cls) | PASSED | Per-domain weights for Celeb-DF and DFDC; DFDC val acc 87% |
+| **ConvNeXt Training** | `train_timm.py` | PASSED | 27.8M params; Celeb-DF best val acc 93.49%, DFDC 92.19% |
+| **EfficientNet Training** | `train_timm.py` | PASSED | 10.7M params; Celeb-DF best val acc 84.27%, DFDC 72.81% |
+| **Ensemble Evaluation** | `evaluate_ensemble.py` | PASSED | Per-model + soft-voting metrics; Brier calibration per model |
+| **Cross-Dataset Matrix** | `build_cross_table.py` | PASSED | 24/24 cells populated, every row `domain-specific`; in-domain AUC 0.7684–0.9403 (Celeb-DF), 0.6044–0.8678 (DFDC) |
+| **Robustness Benchmark** | `robustness_test.py` | PASSED | JPEG (80, 50, 20), Blur (1.5, 3.0), Resize (60%, 30%), Combined |
+| **Results Generator** | `generate_reports.py` | PASSED | `results_table.md`, `roc_plots.png`, `precision_recall_curves.png` |
+| **Client Deliverable** | `regenerate_report.py` | PASSED | All 6 sections populated from artefacts; `run.ps1 -target deliver` exits 0 |
+| **Speed Benchmark** | `benchmark_speed.py` | PASSED | `speed_table.csv`: params / GFLOPs / latency / throughput for 4 architectures |
+| **Label Mapping Tests** | `tests/test_label_mapping.py` | PASSED | 6 tests: `fake=0, real=1` across ImageFolder, YOLO, timm, reports |
+| **Identity Split Tests** | `tests/test_identity_split.py` | PASSED | 14 tests: Union-Find, cluster assignment, primary-identity mode, benchmark parsers, leakage detection |
+| **Metric Orientation Tests** | `tests/test_metric_orientation.py` | PASSED | 13 tests: AUC orientation, prediction direction, ensemble sample alignment, no hardcoded metrics |
+| **Deliverable Provenance Tests** | `tests/test_deliverable_provenance.py` | PASSED | 8 tests: every deliverable number traceable to its artefact; tampering fails the suite |
+| **Eval Transform Tests** | `tests/test_eval_transform.py` | PASSED | 3 tests: evaluation transform matches the training transform |
+| **Offline Dependency Tests** | `tests/test_optional_facenet.py`, `tests/test_local_pretrained.py` | PASSED | 6 tests: pipeline imports and trains without facenet-pytorch / the HuggingFace Hub |
+| **Leakage Tests** | `tests/test_leakage.py` | PASSED | 3 tests: on-disk manifest audit + intentional leakage injection fails |
+| **Drop Frame Tests** | `tests/test_drop_frames.py` | PASSED | 3 tests: blank frame detection, fallback crop, drop stats in manifest |
+| **Calibration Tests** | `tests/test_calibration.py` | PASSED | 3 tests: Brier bounds, probability CSV validity, ensemble_metrics.json |
+| **JPEG Augmentation Tests** | `tests/test_jpeg_augmentation.py` | PASSED | 15 tests: stochastic JPEG compression, quality limits, pipeline order |
+| **DFDC Downloader Tests** | `tests/test_dfdc_downloader.py` | PASSED | 4 tests: Kaggle auth checking, zip extraction, paired source preservation |
+| **Cross-Dataset Tests** | `tests/test_cross_dataset.py` | PASSED | 11 tests: Celeb-DF, DFDC, Real-Life directory structure, resolver, reporting |
+| **Bootstrap Guard Tests** | `tests/test_bootstrap_guard.py` | PASSED | 3 tests: cluster bootstrap refuses fewer than 20 clusters |
+| **Min Videos Guard Tests** | `tests/test_min_videos_per_class.py` | PASSED | 2 tests: report generation halts below 10 videos per class |
+| **Full Test Suite** | `pytest tests/` | PASSED | **105/105 tests** (Windows, Python 3.12.10) |
 

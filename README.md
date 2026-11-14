@@ -31,27 +31,85 @@ Download and place the `.pth` files into `models/checkpoints/`:
 
 ## 📊 Verified Empirical Benchmark & Reality Check
 
-> ⚠️ **Scientific Transparency Notice**: The figures below are strictly computed from automated evaluation logs (`reports/cross_dataset_table.csv`). No numbers are hand-written or cherry-picked.
+> ⚠️ **Scientific Transparency Notice**: every figure below is read straight out of a
+> generated artefact (`reports/cross_dataset_table.csv`, `reports/evaluation_summary.json`,
+> `reports/speed_table.csv`, `reports/training_grid/<domain>/*_history.json`). Nothing is
+> hand-written or cherry-picked. `tests/test_deliverable_provenance.py` and
+> `tests/test_docs_match_measurements.py` fail if a number in this file or in the client
+> deliverable is not present in the artefact it came from.
 
-### 1. In-Domain Performance (Trained on Celeb-DF, Tested on Celeb-DF)
-*Test split composition: 4,440 Fake, 425 Real (Total: 4,865). Due to dataset class imbalance (91.2% fake), raw accuracy is complemented by ROC-AUC and Brier calibration scores:*
+Regenerate them with:
 
-| Architecture | Test Accuracy | F1-Score | ROC-AUC | Brier Score (Lower is better) | Latency (CPU) |
+```bash
+python scripts/build_cross_table.py      # -> reports/cross_dataset_table.csv
+python main.py benchmark-speed --device cpu   # -> reports/speed_table.csv
+python scripts/regenerate_report.py      # -> reports/FINAL_CLIENT_DELIVERABLE.md
+```
+
+### 1. Cross-Dataset ROC-AUC Matrix
+
+FAKE is the positive class, so **0.5 is chance** and higher is better. Every row is a
+genuine train-domain / test-domain measurement: each model was trained on one domain only,
+and the `Checkpoint` column of the generated CSV records that the checkpoint was
+domain-specific.
+
+| Train domain | Test domain | EfficientNet-B3 | ConvNeXt-Tiny | YOLO26n-cls | Ensemble |
+|---|---|---|---|---|---|
+| Celeb-DF v2 | Celeb-DF v2 *(in-domain)* | 0.7684 | 0.9196 | 0.9403 | 0.9140 |
+| Celeb-DF v2 | DFDC *(cross)* | 0.3822 | 0.5933 | 0.6489 | 0.5444 |
+| Celeb-DF v2 | Real-Life *(cross)* | 0.6262 | 0.6533 | 0.5113 | 0.5971 |
+| DFDC | Celeb-DF v2 *(cross)* | 0.6064 | 0.7710 | 0.6697 | 0.7217 |
+| DFDC | DFDC *(in-domain)* | 0.6044 | 0.8233 | 0.8678 | 0.8211 |
+| DFDC | Real-Life *(cross)* | 0.4497 | 0.3929 | 0.3626 | 0.4014 |
+
+**Reading the matrix.** Each model is strongest on the domain it was trained on, drops when
+moved to an unseen dataset, and is weakest on the in-the-wild Real-Life set. Note that
+Celeb-DF v2's test split is 91.2% fake, so raw accuracy on that split is inflated by the
+majority class — ROC-AUC and Brier are the meaningful columns there. The DFDC test split is
+balanced (30 real / 30 fake).
+
+### 2. In-Domain Detail (Trained on Celeb-DF v2, Tested on Celeb-DF v2)
+
+*Test split composition: 4,440 fake, 425 real (4,865 total, 91.2% fake).*
+
+| Architecture | Test Accuracy | F1-Score | ROC-AUC | Brier Score (lower is better) | Latency (CPU) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **YOLO26n-cls** | **95.17%** | **97.39%** | **0.9403** | **0.0399** | 14.05 ms |
-| **Soft-Voting Ensemble** | **94.68%** | **97.13%** | **0.9140** | **0.0563** | 178.34 ms |
-| **ConvNeXt-Tiny** | **94.45%** | **97.03%** | **0.9196** | **0.0539** | 101.36 ms |
-| **EfficientNet-B3** | **81.34%** | **89.16%** | **0.7684** | **0.1449** | 62.93 ms |
+| **YOLO26n-cls** | **95.17%** | **97.39%** | **0.9403** | **0.0399** | 14.18 ms |
+| **ConvNeXt-Tiny** | **94.45%** | **97.03%** | **0.9196** | **0.0539** | 90.11 ms |
+| **Soft-Voting Ensemble** | **94.68%** | **97.13%** | **0.9140** | **0.0563** | 172.06 ms |
+| **EfficientNet-B3** | **81.34%** | **89.16%** | **0.7684** | **0.1449** | 67.77 ms |
 
-### 2. Cross-Dataset Generalization (The True Robustness Test)
-*Deepfake detectors commonly degrade when tested on unseen generation pipelines or different compression formats:*
+### 3. Training Status
 
-| Training Domain | Test Domain | Model | Accuracy | ROC-AUC | Analysis |
-| :--- | :--- | :--- | :---: | :---: | :--- |
-| **DFDC** | **Celeb-DF** | Ensemble | **91.59%** | **0.7217** | High accuracy driven by 91% fake majority; genuine AUC = 0.72 |
-| **Celeb-DF** | **DFDC** (Balanced) | ConvNeXt-Tiny | **56.67%** | **0.5933** | Moderate generalization on Meta challenge |
-| **Celeb-DF** | **Real-Life** (Social Media) | ConvNeXt-Tiny | **53.00%** | **0.6533** | Modest transferability due to compression domain shift |
-| **DFDC** | **Real-Life** | EfficientNet-B3 | **51.33%** | **0.4497** | Domain shift failure (chance-level boundary) |
+From `reports/training_grid/<domain>/*_history.json`:
+
+| Model | Domain | Epochs | Best train acc | Best val acc |
+|---|---|---|---|---|
+| EfficientNet-B3 | Celeb-DF v2 | 4 | 74.58% | 84.27% |
+| ConvNeXt-Tiny | Celeb-DF v2 | 4 | 84.79% | 93.49% |
+| EfficientNet-B3 | DFDC | 4 | 67.79% | 72.81% |
+| ConvNeXt-Tiny | DFDC | 4 | 80.24% | 92.19% |
+
+### 4. Speed & Complexity
+
+From `reports/speed_table.csv` (measured on CPU):
+
+| Architecture | Parameters (M) | Model Size (MB) | Compute (GFLOPs) | Latency (Batch=1 ms) | P95 Latency (ms) | Throughput (FPS B=32) | Measured On |
+|---|---|---|---|---|---|---|---|
+| ConvNeXt-Tiny (timm) | 27.82 M | 334.1 MB | 8.93 | 90.11 ms | 95.62 ms | 17.0 fps | CPU |
+| EfficientNet-B3 (timm) | 10.70 M | 129.2 MB | 2.03 | 67.77 ms | 74.35 ms | 15.7 fps | CPU |
+| YOLO26n-cls (Ultralytics) | 1.53 M | 3.2 MB | 0.40 | 14.18 ms | 16.37 ms | 138.0 fps | CPU |
+| Soft-Voting Ensemble (All 3) | 40.05 M | 466.5 MB | 11.36 | 172.06 ms | 186.34 ms | 14.5 fps | CPU |
+
+### 5. Datasets Actually Used
+
+Counts read from the processed directories:
+
+| Dataset | Source | train | val | test |
+|---|---|---|---|---|
+| Celeb-DF v2 | `reubensuju/celeb-df-v2` (6,229 videos) | 4,378 | 4,655 | 4,865 |
+| DFDC | Kaggle mirrors (212 videos) | 1,807 | 320 | 60 |
+| Real-Life (in-the-wild) | StyleGAN / Stable Diffusion + FF++ swaps | - | - | 1,200 |
 
 ---
 
@@ -60,42 +118,61 @@ Download and place the `.pth` files into `models/checkpoints/`:
 ```text
 deepfake/
 ├── data/
-│   ├── raw/
-│   │   ├── real/                     # Original authentic face images
-│   │   └── fake/                     # Manipulated / Deepfake images
-│   └── processed/
-│       ├── train/ (real/ & fake/)     # Training set (after face extraction & split)
-│       ├── val/   (real/ & fake/)     # Validation set for model selection
-│       └── test/  (real/ & fake/)     # Unseen test set for final evaluation
+│   ├── raw/                            # Source images / videos before extraction
+│   ├── raw_videos/                     # Source videos (real/ & fake/) for identity-aware splitting
+│   ├── processed/                      # Extracted face crops, per domain
+│   │   ├── celebdf/  (train/ val/ test/ real/ fake/)
+│   │   ├── dfdc/     (train/ val/ test/ real/ fake/)
+│   │   └── train/ val/ test/          # Combined split
+│   ├── real_life/                      # 1,200 in-the-wild evaluation images (real/ & fake/)
+│   └── downloads/                      # Downloaded archives (Celeb-DF v2, DFDC subsets)
 ├── preprocessing/
 │   ├── __init__.py
-│   ├── face_extractor.py             # Facial detection & cropping with margin
-│   ├── split_data.py                 # Balanced train/val/test dataset partitioning
-│   └── transforms.py                 # Torchvision augmentations & normalization
+│   ├── face_extractor.py              # MTCNN / Haar facial detection & cropping with margin
+│   ├── extract_faces_from_videos.py    # Video -> face crops, identity-aware splitting
+│   ├── split_by_identity.py           # Union-Find identity/source clustering + zero-leakage audit
+│   ├── split_data.py                  # Balanced train/val/test partitioning (image sets)
+│   └── transforms.py                  # Augmentations, JPEG degradation, normalization
 ├── models/
 │   ├── __init__.py
-│   ├── detector.py                   # MesoNet-4, ResNet-18/50, and EfficientNet
-│   └── checkpoints/                  # Saved .pth model weights
+│   ├── detector.py                    # MesoNet-4, ResNet-18/50, and any timm backbone
+│   └── checkpoints/                   # Saved .pth weights, per domain:
+│       ├── celebdf/  (efficientnet_b3, convnext_tiny)
+│       └── dfdc/     (efficientnet_b3, convnext_tiny)
 ├── training/
 │   ├── __init__.py
-│   ├── dataset.py                    # PyTorch Dataset and DataLoader loaders
-│   └── train.py                      # Training loop with mixed-precision & early stopping
+│   ├── dataset.py                     # PyTorch Dataset and DataLoader loaders
+│   ├── train.py                       # Training loop with mixed-precision & early stopping
+│   ├── train_timm.py                  # EfficientNet-B3 / ConvNeXt-Tiny fine-tuning
+│   ├── train_yolo.py                  # YOLO26n-cls fine-tuning with class weights
+│   └── class_weights.py               # Inverse-frequency / effective / sqrt weighting
 ├── evaluation/
 │   ├── __init__.py
-│   ├── evaluate.py                   # Generates Confusion Matrix, ROC-AUC & metrics
-│   └── predict.py                    # Inference on single images or full directories
-├── reports/                          # Generated plots, logs, and markdown summaries
-│   ├── training_curves.png
-│   ├── confusion_matrix.png
-│   ├── roc_curve.png
-│   ├── evaluation_summary.json
-│   └── evaluation_report.md
-├── scripts/
-│   └── generate_sample_data.py       # Generates sample portraits for testing
-├── config.py                         # Centralized configuration & hyperparameters
-├── main.py                           # Unified CLI entrypoint
-├── requirements.txt                  # Python dependencies
-└── README.md                         # Project documentation and step-by-step guide
+│   ├── evaluate.py                    # Confusion matrix, ROC-AUC, calibration, CSV
+│   ├── evaluate_ensemble.py           # Multi-model + soft-voting ensemble evaluation
+│   ├── evaluate_cross_dataset.py      # Train-domain x test-domain matrix
+│   ├── generate_reports.py            # Results tables + ROC/PR plots from saved predictions
+│   ├── robustness_test.py             # JPEG / blur / downscale degradation benchmark
+│   └── video_metrics.py               # Video-level aggregation, cluster bootstrap CIs
+├── preprocessing/, scripts/
+│   ├── build_cross_table.py           # Cross-dataset matrix + heatmap
+│   ├── regenerate_report.py           # Client deliverable from artefacts only
+│   ├── train_all_datasets.py          # Training grid, one subprocess per model
+│   ├── download_celebrity_df.py       # Celeb-DF v2 acquisition
+│   └── download_dfdc_subset.py        # DFDC acquisition
+├── pretrained/                        # Vendored ImageNet weights (offline timm training)
+├── vendor/                            # Vendored ultralytics + facenet-pytorch (offline sandboxes)
+├── reports/                           # Generated plots, logs, and markdown summaries
+│   ├── FINAL_CLIENT_DELIVERABLE.md    # Client deliverable (generated, never hand-edited)
+│   ├── cross_dataset_table.csv        # Cross-dataset metrics
+│   ├── evaluation_summary.json        # Single-model evaluation metrics
+│   ├── speed_table.csv                # Parameters / GFLOPs / latency / throughput
+│   └── training_grid/<domain>/        # Per-domain training histories and curves
+├── config.py                          # Centralized configuration & hyperparameters
+├── main.py                            # Unified CLI entrypoint
+├── requirements.txt                   # Python dependencies
+├── run.ps1                            # PowerShell runner (test/pilot/full/reports/deliver)
+└── README.md                          # Project documentation & step-by-step guide
 ```
 
 ---
@@ -137,8 +214,19 @@ Place your images into `data/raw/`:
 - `data/raw/fake/`: Deepfake or synthetic face images.
 
 #### Dataset Compatibility & Benchmarks:
-- **Local Synthetic Dataset (Active)**: Created via `python scripts/generate_sample_data.py` and `python scripts/generate_sample_videos.py` with known actor and source IDs for end-to-end verification.
-- **External Benchmarks Supported by Pipeline**: The preprocessing and splitting tools include built-in split parsers for major public benchmarks (FaceForensics++, Celeb-DF v2, and DFDC). Note that the local test dataset does not include external benchmark files unless you download them separately.
+- **Celeb-DF v2 (Active)**: The full public benchmark (6,229 videos) is downloaded with
+  `python scripts/download_celebrity_df.py` and extracted into identity-disjoint
+  train/val/test splits — 31,141 face crops in total.
+- **DFDC (Active)**: 212 videos from the Kaggle mirrors, ingested with
+  `python scripts/download_dfdc_subset.py`, extracted into 2,120 face crops.
+- **FaceForensics++ (Supported)**: the preprocessing and splitting tools include a built-in
+  parser for the official `train.json` / `val.json` / `test.json` split lists.
+- **Real-Life in-the-wild (Active)**: 1,200 images (600 authentic portraits, 600 AI-generated
+  faces and FF++ swaps) built by `python scripts/ingest_real_life_generator_faces.py`, used as
+  a third, fully unseen evaluation domain.
+- **Synthetic demo data (Available for smoke tests)**: `python scripts/generate_sample_data.py`
+  and `python scripts/generate_sample_videos.py` create a small set with known actor and source
+  IDs, for end-to-end verification without downloading anything.
 
 > **Testing without downloading external datasets?**
 > Generate synthetic sample test images and videos with identity/source metadata:

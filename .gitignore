@@ -93,6 +93,8 @@ reports/*
 !reports/model_benchmark_table.md
 !reports/model_benchmark_summary.json
 !reports/inference_speed_comparison.png
+!reports/speed_table.csv
+!reports/cross_dataset_table.csv
 
 
 kaggle_art3/

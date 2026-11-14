@@ -21,6 +21,7 @@ Outputs:
 import sys
 import time
 import json
+import csv
 import argparse
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -259,6 +260,32 @@ def benchmark_all_models(
     plot_path = output_dir / "inference_speed_comparison.png"
     plot_benchmark_comparison(results, plot_path)
     logger.info(f"Saved benchmark plot: {plot_path}")
+
+    # Save the CSV that scripts/regenerate_report.py reads for Section 3 of
+    # the client deliverable. It records the device the latency was measured
+    # on, so the numbers cannot be mislabelled as CPU when they came from a
+    # GPU (or vice versa).
+    csv_path = output_dir / "speed_table.csv"
+    platform = (torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU")
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "Architecture", "Parameters (M)", "Model Size (MB)", "Compute (GFLOPs)",
+            "Latency (Batch=1 ms)", "P95 Latency (ms)", "Throughput (FPS B=32)",
+            "Measured On",
+        ])
+        for name, r in results.items():
+            writer.writerow([
+                name,
+                f"{r['parameters_m']:.2f} M",
+                f"{r['size_mb']:.1f} MB",
+                f"{r['gflops']:.2f}",
+                f"{r['latency_ms_b1']:.2f} ms",
+                f"{r['latency_p95_ms_b1']:.2f} ms",
+                f"{r['throughput_b32_fps']:.1f} fps",
+                platform,
+            ])
+    logger.info(f"Saved speed table CSV: {csv_path}")
 
     print("\n" + md_path.read_text(encoding="utf-8"))
     return results

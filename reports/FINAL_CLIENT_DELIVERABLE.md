@@ -71,12 +71,12 @@
 
 ## 3. Model Speed & Efficiency
 
-| Architecture | Parameters (M) | Model Size (MB) | Compute (GFLOPs) | Latency (Batch=1 ms) | P95 Latency (ms) | Throughput (FPS B=32) |
-| --- | --- | --- | --- | --- | --- | --- |
-| ConvNeXt-Tiny (timm) | 27.82 M | 334.1 MB | 8.93 | 101.36 ms | 128.47 ms | 13.9 fps |
-| EfficientNet-B3 (timm) | 10.70 M | 129.2 MB | 2.03 | 62.93 ms | 74.69 ms | 17.7 fps |
-| YOLO26n-cls (Ultralytics) | 1.53 M | 3.2 MB | 0.40 | 14.05 ms | 18.12 ms | 164.0 fps |
-| Soft-Voting Ensemble (All 3) | 40.05 M | 466.5 MB | 11.36 | 178.34 ms | 221.28 ms | 14.0 fps |
+| Architecture | Parameters (M) | Model Size (MB) | Compute (GFLOPs) | Latency (Batch=1 ms) | P95 Latency (ms) | Throughput (FPS B=32) | Measured On |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ConvNeXt-Tiny (timm) | 27.82 M | 334.1 MB | 8.93 | 90.11 ms | 95.62 ms | 17.0 fps | CPU |
+| EfficientNet-B3 (timm) | 10.70 M | 129.2 MB | 2.03 | 67.77 ms | 74.35 ms | 15.7 fps | CPU |
+| YOLO26n-cls (Ultralytics) | 1.53 M | 3.2 MB | 0.40 | 14.18 ms | 16.37 ms | 138.0 fps | CPU |
+| Soft-Voting Ensemble (All 3) | 40.05 M | 466.5 MB | 11.36 | 172.06 ms | 186.34 ms | 14.5 fps | CPU |
 
 ---
 
