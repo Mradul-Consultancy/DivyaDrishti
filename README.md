@@ -79,14 +79,15 @@ balanced (30 real / 30 fake).
 
 ### 2. In-Domain Detail (Trained on Celeb-DF v2, Tested on Celeb-DF v2)
 
-*Test split composition: 4,440 fake, 425 real (4,865 total, 91.2% fake).*
+*Test split composition: 4,440 fake, 425 real (4,865 total, 91.26% fake).*
+> ⚠️ **Evaluation Integrity Disclosure**: Because 91.26% of the test set is Fake, raw accuracy is strongly biased towards the majority class. **Balanced Accuracy** (average of real and fake recall) provides the true uninflated classification capability:
 
-| Architecture | Test Accuracy | F1-Score | ROC-AUC | Brier Score (lower is better) | Latency (CPU) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **YOLO26n-cls** | **95.17%** | **97.39%** | **0.9403** | **0.0399** | 14.18 ms |
-| **ConvNeXt-Tiny** | **94.45%** | **97.03%** | **0.9196** | **0.0539** | 90.11 ms |
-| **Soft-Voting Ensemble** | **94.68%** | **97.13%** | **0.9140** | **0.0563** | 172.06 ms |
-| **EfficientNet-B3** | **81.34%** | **89.16%** | **0.7684** | **0.1449** | 67.77 ms |
+| Architecture | Raw Accuracy | Balanced Accuracy | Real Recall | Fake Recall | F1-Score | ROC-AUC | Brier Score (lower is better) | Latency (CPU) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **YOLO26n-cls** | **95.17%** | **79.06%** | **59.53%** | **98.58%** | **97.39%** | **0.9403** | **0.0399** | 14.18 ms |
+| **ConvNeXt-Tiny** | **94.45%** | **71.53%** | **43.76%** | **99.30%** | **97.03%** | **0.9196** | **0.0539** | 90.11 ms |
+| **Soft-Voting Ensemble** | **94.68%** | **75.91%** | **53.18%** | **98.65%** | **97.13%** | **0.9140** | **0.0563** | 172.06 ms |
+| **EfficientNet-B3** | **81.34%** | **68.39%** | **52.71%** | **84.08%** | **89.16%** | **0.7684** | **0.1449** | 67.77 ms |
 
 ### 3. Training Status
 

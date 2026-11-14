@@ -38,16 +38,18 @@ def _auc_for_timm(model_name: str, ckpt: Path):
     from training.dataset import DeepfakeDataset
     from training.train_timm import get_timm_transforms
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = timm.create_model(model_name, pretrained=False, num_classes=2)
-    model.load_state_dict(torch.load(ckpt, map_location="cpu")["state_dict"])
+    model.load_state_dict(torch.load(ckpt, map_location=device)["state_dict"])
+    model.to(device)
     model.eval()
 
     ds = DeepfakeDataset(_celebdf_test_dir(),
                           transform=get_timm_transforms(model, is_training=False))
     probs, labels = [], []
     with torch.no_grad():
-        for x, y in DataLoader(ds, batch_size=32):
-            probs += torch.softmax(model(x), 1)[:, config.FAKE_LABEL_IDX].tolist()
+        for x, y in DataLoader(ds, batch_size=64 if device.type == "cuda" else 32):
+            probs += torch.softmax(model(x.to(device)), 1)[:, config.FAKE_LABEL_IDX].tolist()
             labels += y.tolist()
     # FAKE is the positive class.
     return roc_auc_score([1 - l for l in labels], probs)
@@ -62,14 +64,16 @@ def _auc_for_resnet18(ckpt: Path):
     from preprocessing.transforms import get_val_transforms
     from training.dataset import DeepfakeDataset
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_model("resnet18", num_classes=2, pretrained=False)
-    model.load_state_dict(torch.load(ckpt, map_location="cpu")["state_dict"])
+    model.load_state_dict(torch.load(ckpt, map_location=device)["state_dict"])
+    model.to(device)
     model.eval()
     ds = DeepfakeDataset(_celebdf_test_dir(), transform=get_val_transforms())
     probs, labels = [], []
     with torch.no_grad():
-        for x, y in DataLoader(ds, batch_size=32):
-            probs += torch.softmax(model(x), 1)[:, config.FAKE_LABEL_IDX].tolist()
+        for x, y in DataLoader(ds, batch_size=64 if device.type == "cuda" else 32):
+            probs += torch.softmax(model(x.to(device)), 1)[:, config.FAKE_LABEL_IDX].tolist()
             labels += y.tolist()
     return roc_auc_score([1 - l for l in labels], probs)
 
