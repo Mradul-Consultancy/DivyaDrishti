@@ -53,6 +53,27 @@ def _auc_for_timm(model_name: str, ckpt: Path):
     return roc_auc_score([1 - l for l in labels], probs)
 
 
+def _auc_for_resnet18(ckpt: Path):
+    """ResNet-18 is a hand-written backbone, so it uses the torchvision transform."""
+    import torch
+    from torch.utils.data import DataLoader
+    from sklearn.metrics import roc_auc_score
+    from models.detector import get_model
+    from preprocessing.transforms import get_val_transforms
+    from training.dataset import DeepfakeDataset
+
+    model = get_model("resnet18", num_classes=2, pretrained=False)
+    model.load_state_dict(torch.load(ckpt, map_location="cpu")["state_dict"])
+    model.eval()
+    ds = DeepfakeDataset(_celebdf_test_dir(), transform=get_val_transforms())
+    probs, labels = [], []
+    with torch.no_grad():
+        for x, y in DataLoader(ds, batch_size=32):
+            probs += torch.softmax(model(x), 1)[:, config.FAKE_LABEL_IDX].tolist()
+            labels += y.tolist()
+    return roc_auc_score([1 - l for l in labels], probs)
+
+
 class TestShippedCheckpointsAreTrained:
     @pytest.mark.parametrize("model_name", [
         "efficientnet_b3.ra2_in1k",
@@ -68,12 +89,23 @@ class TestShippedCheckpointsAreTrained:
             "a checkpoint that does not clearly beat chance must not be shipped."
         )
 
+    def test_resnet18_fallback_beats_chance(self):
+        ckpt = config.CHECKPOINT_DIR / "resnet18_best.pth"
+        if not ckpt.exists():
+            pytest.skip("resnet18_best.pth not present")
+        auc = _auc_for_resnet18(ckpt)
+        assert auc > 0.60, (
+            f"resnet18_best.pth scores ROC-AUC {auc:.4f} on the Celeb-DF v2 test "
+            "split - a checkpoint that does not clearly beat chance must not be shipped."
+        )
+
     def test_fallback_matches_a_per_domain_checkpoint(self):
         """
         The fallback path must hold the same weights as one of the
         per-domain checkpoints, not a superseded warm-up copy.
         """
-        for model_name in ("efficientnet_b3.ra2_in1k", "convnext_tiny.fb_in22k_ft_in1k"):
+        for model_name in ("efficientnet_b3.ra2_in1k", "convnext_tiny.fb_in22k_ft_in1k",
+                           "resnet18"):
             fallback = config.CHECKPOINT_DIR / f"{model_name}_best.pth"
             per_domain = config.CHECKPOINT_DIR / "celebdf" / f"{model_name}_best.pth"
             if not (fallback.exists() and per_domain.exists()):

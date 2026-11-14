@@ -28,6 +28,7 @@ Place the `.pth` files into `models/checkpoints/`:
 |---|---|---|---|
 | [`efficientnet_b3.ra2_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/efficientnet_b3.ra2_in1k_best.pth) *(123 MB)* | EfficientNet-B3 | Celeb-DF v2 | **0.7684** |
 | [`convnext_tiny.fb_in22k_ft_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/convnext_tiny.fb_in22k_ft_in1k_best.pth) *(318 MB)* | ConvNeXt-Tiny | Celeb-DF v2 | **0.9196** |
+| `resnet18_best.pth` *(128 MB)* | ResNet-18 (lightweight) | Celeb-DF v2 | **0.9717** |
 
 > **Which checkpoint am I getting?** `models/checkpoints/<model>_best.pth` is the *fallback*
 > path used when a domain-specific checkpoint is absent, and it now holds the Celeb-DF v2

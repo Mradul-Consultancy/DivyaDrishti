@@ -110,13 +110,49 @@ class TestReadmeQuotesMeasuredNumbers:
         assert "scripts/regenerate_report.py" in txt
         assert "test_deliverable_provenance.py" in txt
 
+    def test_every_checkpoint_the_readme_names_exists(self):
+        """A download link must not point at a file the project does not have."""
+        import os
+
+        txt = _read(README)
+        names = set(re.findall(r"`([A-Za-z0-9_.\-]+\.pth)`", txt))
+        names |= set(re.findall(r"/([A-Za-z0-9_.\-]+\.pth)\)", txt))
+        assert names, "no checkpoint filenames found in the README"
+        for n in sorted(names):
+            found = any(
+                os.path.exists(os.path.join(ROOT, "models", "checkpoints", d, n))
+                for d in ("", "celebdf", "dfdc")
+            )
+            assert found, f"README references {n!r} but no such checkpoint exists"
+
+    def test_readme_weights_table_quotes_measured_aucs(self):
+        """
+        The weights table states a ROC-AUC per checkpoint; each must be the
+        value measured for that model on the Celeb-DF test split.
+        """
+        txt = _read(README)
+        rows = [ln for ln in txt.splitlines()
+                if ln.startswith("|") and "Celeb-DF v2 |" in ln and "**" in ln]
+        assert rows, "README weights table not found"
+        for ln in rows:
+            cells = [c.strip() for c in ln.strip("|").split("|")]
+            auc = cells[-1].replace("**", "")
+            assert re.fullmatch(r"\d\.\d{4}", auc), (
+                f"weights row does not quote a measured ROC-AUC: {ln!r}"
+            )
+
 
 class TestProjectDocumentationQuotesMeasuredNumbers:
     def test_documentation_exists(self):
         assert DOCS.exists()
 
     def test_test_count_in_docs_matches_the_suite(self):
-        """The documented test count must equal what pytest actually collects."""
+        """
+        The documented test count must equal what pytest actually collects.
+
+        Run `python scripts/sync_doc_counts.py` to update it after adding
+        or removing tests.
+        """
         txt = _read(DOCS)
         m = re.search(r"\*\*(\d+)/(\d+) tests", txt)
         assert m, "no test-count claim found in PROJECT_DOCUMENTATION.md"
@@ -130,7 +166,7 @@ class TestProjectDocumentationQuotesMeasuredNumbers:
         collected = len([l for l in out.stdout.splitlines() if "::" in l])
         assert documented == collected, (
             f"PROJECT_DOCUMENTATION.md claims {documented} tests but pytest "
-            f"collects {collected}"
+            f"collects {collected}. Run `python scripts/sync_doc_counts.py`."
         )
 
     def test_verification_table_has_no_stale_environment_claim(self):
