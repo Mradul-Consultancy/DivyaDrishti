@@ -452,5 +452,5 @@ not present in the artefact it came from.
 | **Cross-Dataset Tests** | `tests/test_cross_dataset.py` | PASSED | 11 tests: Celeb-DF, DFDC, Real-Life directory structure, resolver, reporting |
 | **Bootstrap Guard Tests** | `tests/test_bootstrap_guard.py` | PASSED | 3 tests: cluster bootstrap refuses fewer than 20 clusters |
 | **Min Videos Guard Tests** | `tests/test_min_videos_per_class.py` | PASSED | 2 tests: report generation halts below 10 videos per class |
-| **Full Test Suite** | `pytest tests/` | PASSED | **105/105 tests** (Windows, Python 3.12.10) |
+| **Full Test Suite** | `pytest tests/` | PASSED | **108/108 tests** (Windows, Python 3.12.10) |
 

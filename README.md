@@ -17,15 +17,23 @@ streamlit run app.py
 
 ---
 
-## 📥 Pre-Trained Model Weights (GitHub Releases)
+## 📦 Pre-Trained Model Weights (GitHub Releases)
 
-Pre-trained model checkpoints are hosted on GitHub Releases:
-👉 **[Download DivyaDrishti v1.0.0 Model Checkpoints](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/tag/v1.0.0)**
+Model checkpoints are hosted on GitHub Releases:
+🔗 **[Download DivyaDrishti v1.0.0 Model Checkpoints](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/tag/v1.0.0)**
 
-Download and place the `.pth` files into `models/checkpoints/`:
-- [`efficientnet_b3.ra2_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/efficientnet_b3.ra2_in1k_best.pth) *(123 MB — Recommended)*
-- [`convnext_tiny.fb_in22k_ft_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/convnext_tiny.fb_in22k_ft_in1k_best.pth) *(318 MB — High Robustness)*
-- [`resnet18_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/resnet18_best.pth) *(128 MB — Lightweight Baseline)*
+Place the `.pth` files into `models/checkpoints/`:
+
+| File | Backbone | Trained on | Measured ROC-AUC (Celeb-DF v2 test) |
+|---|---|---|---|
+| [`efficientnet_b3.ra2_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/efficientnet_b3.ra2_in1k_best.pth) *(123 MB)* | EfficientNet-B3 | Celeb-DF v2 | **0.7684** |
+| [`convnext_tiny.fb_in22k_ft_in1k_best.pth`](https://github.com/Mradul-Consultancy/DivyaDrishti/releases/download/v1.0.0/convnext_tiny.fb_in22k_ft_in1k_best.pth) *(318 MB)* | ConvNeXt-Tiny | Celeb-DF v2 | **0.9196** |
+
+> **Which checkpoint am I getting?** `models/checkpoints/<model>_best.pth` is the *fallback*
+> path used when a domain-specific checkpoint is absent, and it now holds the Celeb-DF v2
+> weights listed above. The per-domain checkpoints live in `models/checkpoints/celebdf/` and
+> `models/checkpoints/dfdc/`; those are what the cross-dataset table below was measured
+> with. Every figure here is reproducible with `python scripts/build_cross_table.py`.
 
 ---
 
