@@ -1,4 +1,4 @@
-# Deep-Fake Detection — Client Deliverable
+# DivyaDrishti (दिव्यदृष्टि) AI — Deepfake Detection Client Deliverable
 *Auto-generated from result artefacts on {{DATE}}. No hand-written numbers.*
 
 > **Important**: This document is generated automatically from JSON/CSV files produced by

@@ -1,6 +1,6 @@
 """
-Master CLI Entrypoint for Deepfake Image Detection.
-Allows running individual stages (preprocess, train, evaluate, predict) or a complete end-to-end demo.
+DivyaDrishti (दिव्यदृष्टि) AI — Master CLI Entrypoint for Deepfake Image & Video Detection.
+Allows running individual stages (preprocess, train, evaluate, predict) or a complete end-to-end pipeline.
 """
 
 import sys
@@ -19,7 +19,7 @@ from scripts.generate_sample_data import generate_samples
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Deepfake Image Detection Pipeline",
+        description="DivyaDrishti (दिव्यदृष्टि) AI: Deepfake Detection Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

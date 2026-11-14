@@ -387,7 +387,7 @@ class PredictionReportGenerator:
     def print_ascii_table(self, metrics: Dict[str, Dict]):
         """Prints a clean ASCII table to terminal."""
         print("\n" + "=" * 112)
-        print("                  DEEPFAKE DETECTION: RESULTS TABLE FROM SAVED PREDICTIONS")
+        print("                  DIVYADRISHTI AI: RESULTS TABLE FROM SAVED PREDICTIONS")
         print("=" * 112)
         header = f"{'Model':<26} | {'Accuracy':<9} | {'Precision':<9} | {'Recall':<9} | {'F1-Score':<9} | {'ROC-AUC':<8} | {'PR-AUC':<8} | {'Brier':<8}"
         print(header)

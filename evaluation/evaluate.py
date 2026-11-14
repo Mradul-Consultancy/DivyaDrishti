@@ -1,5 +1,5 @@
 """
-Evaluation script for Deepfake Detection models.
+DivyaDrishti AI: Evaluation script for Deepfake Detection models.
 Computes Confusion Matrix, Precision, Recall, F1-score, and ROC-AUC curve.
 Saves visual evaluation plots and markdown reports to reports/.
 """
@@ -240,7 +240,7 @@ def evaluate_model(args):
     # Generate Markdown report (unchanged content but added reference to CSV)
     report_md_path = Path(args.reports_dir) / "evaluation_report.md"
     with open(report_md_path, "w", encoding="utf-8") as f:
-        f.write("# Deepfake Detection Evaluation Report\n\n")
+        f.write("# DivyaDrishti AI — Deepfake Detection Evaluation Report\n\n")
         f.write(f"- **Model**: `{model_name}`\n")
         f.write(f"- **Evaluated Checkpoint**: `{args.checkpoint}`\n")
         f.write(f"- **Total Test Images**: `{len(test_dataset)}`\n\n")
@@ -360,7 +360,7 @@ def evaluate_model(args):
     # Generate Markdown Summary Report
     report_md_path = Path(args.reports_dir) / "evaluation_report.md"
     with open(report_md_path, "w", encoding="utf-8") as f:
-        f.write("# Deepfake Detection Evaluation Report\n\n")
+        f.write("# DivyaDrishti AI — Deepfake Detection Evaluation Report\n\n")
         f.write(f"- **Model**: `{model_name}`\n")
         f.write(f"- **Evaluated Checkpoint**: `{args.checkpoint}`\n")
         f.write(f"- **Total Test Images**: `{len(test_dataset)}`\n\n")
@@ -390,7 +390,7 @@ def evaluate_model(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate Deepfake Detector on Test Dataset")
+    parser = argparse.ArgumentParser(description="DivyaDrishti AI: Evaluate Deepfake Detector on Test Dataset")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to trained model .pth checkpoint")
     parser.add_argument("--model", type=str, default="resnet18", help="Model architecture")
     parser.add_argument("--data-dir", type=str, default=str(config.PROCESSED_DATA_DIR), help="Dataset directory containing test split")

@@ -1,6 +1,6 @@
-# Deepfake Image Detection Pipeline
+# DivyaDrishti (दिव्यदृष्टि) AI — Deepfake Image Detection Pipeline
 
-A modular, production-ready deep learning project for detecting manipulated and synthetic facial images (Deepfakes). Features face alignment/extraction, multiple CNN backbones (ResNet-18, ResNet-50, MesoNet-4, EfficientNet-B0), mixed-precision training, early stopping, evaluation metrics (ROC-AUC, Confusion Matrix), and single/batch inference with visual overlays.
+**DivyaDrishti AI** (from Sanskrit *दिव्य* 'divine' + *दृष्टि* 'vision/perception') is a modular, production-ready deep learning system designed for detecting manipulated, synthetic, and AI-generated facial media (Deepfakes). Features MTCNN face extraction, zero-leakage identity partitioning, multi-backbone neural architectures (EfficientNet-B3, ConvNeXt-Tiny, YOLO26n-cls, ResNet-18/50), mixed-precision training, soft-voting ensemble fusion, cross-dataset generalization matrices, and comprehensive robustness auditing.
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Evaluation and Soft-Voting Ensemble Pipeline for Deepfake Detection.
+DivyaDrishti AI: Evaluation and Soft-Voting Ensemble Pipeline for Deepfake Detection.
 
 Evaluates:
 1. YOLO26n-cls (Ultralytics)
@@ -539,7 +539,7 @@ def generate_ensemble_markdown_report(
     weights_str = f"[{current_weights[0]:.4f}, {current_weights[1]:.4f}, {current_weights[2]:.4f}]"
 
     with open(save_path, "w", encoding="utf-8") as f:
-        f.write("# Deepfake Detection Ensemble Evaluation Report\n\n")
+        f.write("# DivyaDrishti AI — Ensemble Evaluation Report\n\n")
         f.write(f"- **Total Test Samples**: `{total_samples}`\n")
         f.write(f"- **Ensemble Strategy**: Soft-Voting (Weighted Average of Class Probabilities)\n")
         f.write(f"- **Ensemble Weights [YOLO, ConvNeXt, EfficientNet]**: `{weights_str}`\n")
@@ -606,7 +606,7 @@ def print_ascii_summary(results: Dict[str, Dict]):
     }
 
     print("\n" + "=" * 95)
-    print("           DEEPFAKE DETECTION: MULTI-MODEL & ENSEMBLE EVALUATION")
+    print("           DIVYADRISHTI AI: MULTI-MODEL & ENSEMBLE EVALUATION")
     print("=" * 95)
     print(f"{'Model':<25} | {'Accuracy':<10} | {'Precision':<10} | {'Recall':<10} | {'F1-Score':<10} | {'ROC-AUC':<8} | {'Brier (Calib)':<12}")
     print("-" * 95)

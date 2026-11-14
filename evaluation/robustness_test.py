@@ -1,5 +1,5 @@
 """
-Robustness Testing Pipeline for Deepfake Detection.
+DivyaDrishti AI: Robustness Testing Pipeline for Deepfake Detection.
 
 Tests resilience of individual models (YOLO26n-cls, ConvNeXt-Tiny, EfficientNet-B3)
 and the Soft-Voting Ensemble under realistic image degradations:
@@ -369,7 +369,7 @@ class RobustnessTester:
     def _generate_markdown_report(self, b: Dict, total_samples: int, save_path: Path):
         """Generates comprehensive markdown report detailing metric drops."""
         with open(save_path, "w", encoding="utf-8") as f:
-            f.write("# Deepfake Detection Robustness Benchmark Report\n\n")
+            f.write("# DivyaDrishti AI — Robustness Benchmark Report\n\n")
             f.write(f"- **Total Test Images**: `{total_samples}`\n")
             f.write("- **Evaluated Models**: `YOLO26n-cls`, `ConvNeXt-Tiny`, `EfficientNet-B3`, `Soft-Voting Ensemble`\n")
             f.write("- **Distortion Types Tested**: JPEG Recompression, Gaussian Blur, Resolution Downscale, Combined Social Media Sim\n\n")

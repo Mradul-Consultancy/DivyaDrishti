@@ -1,10 +1,14 @@
 """
-Central configuration for Deepfake Detection Pipeline.
+Central configuration for DivyaDrishti (दिव्यदृष्टि) AI — Deepfake Detection Pipeline.
 """
 
 from pathlib import Path
 import os
 import torch
+
+# Project Identity
+PROJECT_NAME = "DivyaDrishti AI"
+PROJECT_TAGLINE = "DivyaDrishti (दिव्यदृष्टि) Deepfake Detection Pipeline"
 
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent

@@ -339,7 +339,7 @@ def plot_benchmark_comparison(results: Dict[str, Dict], save_path: Path):
         ax.grid(axis="y", linestyle=":", alpha=0.5)
         ax.set_xticklabels(names, rotation=15, ha="right", fontsize=9)
 
-    plt.suptitle("Deepfake Detection Backbone Complexity & Speed Comparison", fontweight="bold", fontsize=13, y=1.02)
+    plt.suptitle("DivyaDrishti AI — Backbone Complexity & Speed Comparison", fontweight="bold", fontsize=13, y=1.02)
     plt.tight_layout()
     plt.savefig(save_path, dpi=250, bbox_inches="tight")
     plt.close()
