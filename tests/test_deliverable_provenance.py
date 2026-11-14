@@ -160,8 +160,9 @@ class TestDeliverableProvenance:
             domain = ""
             if "[" in name and name.endswith("]"):
                 domain = name[name.index("[") + 1:-1].strip()
-            # The deliverable renames training_history.json for readability.
-            if base.startswith("resnet18 (demo run)"):
+            # The deliverable renames the generic training_history.json for
+            # readability ("resnet18").
+            if base == "resnet18" and ("resnet18", domain) not in histories:
                 base = "training"
             match = histories.get((base, domain))
             if match is None and domain:

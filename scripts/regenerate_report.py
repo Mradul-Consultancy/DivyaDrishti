@@ -95,9 +95,9 @@ def build_training_status_section() -> str:
     seen = set()
     for hist_path in sorted(REPORTS.rglob("*_history.json")):
         name = hist_path.name.replace("_history.json", "")
-        # "training_history.json" is the generic ResNet-18 demo run; give it a
+        # "training_history.json" is the generic ResNet-18 run; give it a
         # readable label instead of the bare word "training".
-        display = "resnet18 (demo run)" if name == "training" else name
+        display = "resnet18" if name == "training" else name
         # Label with the domain when the history lives in a domain folder.
         domain = hist_path.parent.name
         if domain not in ("celebdf", "dfdc"):

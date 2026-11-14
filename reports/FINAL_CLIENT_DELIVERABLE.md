@@ -86,10 +86,9 @@
 |---|---|---|---|---|
 | convnext_tiny.fb_in22k_ft_in1k [celebdf] | 4 | 84.79% | 93.49% | Converged |
 | efficientnet_b3.ra2_in1k [celebdf] | 4 | 74.58% | 84.27% | Converged |
-| resnet18 (demo run) [celebdf] | 6 | 97.30% | 95.36% | Converged |
+| resnet18 [celebdf] | 6 | 97.30% | 95.36% | Converged |
 | convnext_tiny.fb_in22k_ft_in1k [dfdc] | 4 | 80.24% | 92.19% | Converged |
 | efficientnet_b3.ra2_in1k [dfdc] | 4 | 67.79% | 72.81% | Converged |
-| resnet18 (demo run) | 2 | 83.33% | 50.00% | **Not converged (chance-level)** |
 
 ---
 
