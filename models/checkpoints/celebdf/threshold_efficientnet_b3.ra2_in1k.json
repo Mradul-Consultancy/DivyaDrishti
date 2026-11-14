@@ -1,0 +1,34 @@
+{
+  "domain": "celebdf",
+  "model_name": "efficientnet_b3.ra2_in1k",
+  "checkpoint": "E:\\deepfake\\models\\checkpoints\\celebdf\\efficientnet_b3.ra2_in1k_best.pth",
+  "validation_dir": "E:\\deepfake\\data\\processed\\celebdf\\val",
+  "validation_samples": 4655,
+  "target_false_positive_rate": 0.01,
+  "target_fpr_achievable": false,
+  "chosen_threshold": 0.932265,
+  "chosen_policy": "youden (maximises TPR - FPR)",
+  "at_chosen_threshold": {
+    "threshold": 0.932265,
+    "fake_recall": 0.657778,
+    "real_recall": 0.755263,
+    "false_positive_rate": 0.244737,
+    "precision": 0.967986
+  },
+  "fpr_constrained_threshold": 0.999176,
+  "at_fpr_constrained_threshold": {
+    "threshold": 0.999176,
+    "fake_recall": 0.195556,
+    "real_recall": 0.981579,
+    "false_positive_rate": 0.018421,
+    "precision": 0.991696
+  },
+  "at_default_0.5": {
+    "threshold": 0.500233,
+    "fake_recall": 0.873918,
+    "real_recall": 0.484211,
+    "false_positive_rate": 0.515789,
+    "precision": 0.950153
+  },
+  "note": "Measured on the validation split only; the test split is never used for threshold selection. 'chosen_threshold' is the balanced operating point. 'fpr_constrained_threshold' maximises detection rate subject to the target false-positive rate; 'target_fpr_achievable' is False when no point on this split meets the target, which is itself a finding about detector quality."
+}
