@@ -114,6 +114,7 @@ kaggle_final2/
 kaggle_art7/
 kaggle_ckpt_dfdc_ds/
 kaggle_final3/
+kaggle_kernel_log2/
 
 # Per-domain trained weights and their large sidecars. The weights are
 # published via GitHub Releases; the small JSON artefacts that inference
