@@ -31,6 +31,16 @@ EXCLUDES = {
     # ImageNet weights ship as their own dataset: a 580 MB code dataset does
     # not materialise reliably on Kaggle, whereas small ones do.
     'pretrained',
+    # Scratch trees left by earlier packaging / download runs. Each holds a
+    # full revision of the codebase plus downloaded artefacts, and would
+    # multiply the size of the package.
+    'kaggle_artifacts', 'kaggle_art', 'kaggle_art2', 'kaggle_art3',
+    'kaggle_art4', 'kaggle_art5', 'kaggle_art6', 'kaggle_art7',
+    'kaggle_final', 'kaggle_final2', 'kaggle_final3', 'kaggle_out',
+    'kaggle_ckpt_dfdc_ds', 'kaggle_pretrained_ds', 'kaggle_train',
+    'kaggle_celebdf_kernel', 'kaggle_acc_gpu', 'kaggle_acc_NvidiaTeslaT4x2',
+    'staging_dataset', 'train_out', 'train_out2', 'train_out3', 'train_out4',
+    'train_out5', 'logs',
 }
 # NOTE: '.pt' is NOT excluded - the YOLO26n-cls pretrained checkpoint must
 # ship with the code, otherwise YOLO training cannot start on Kaggle.
