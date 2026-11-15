@@ -269,6 +269,11 @@ async def detect_image(
     except Exception:
         raise HTTPException(status_code=415, detail="input is not a decodable image")
 
+    # Face detection and inference are CPU/GPU-bound. Running them inline in
+    # an `async def` endpoint blocks the event loop, so every other request
+    # waits for this one. They are pushed onto a worker thread instead.
+    from starlette.concurrency import run_in_threadpool
+
     loaded = get_loaded(model)
     if threshold is not None:
         thr = float(threshold)
@@ -286,7 +291,7 @@ async def detect_image(
                                       f"threshold_{model}.json").exists() else "default"
 
     extractor = get_extractor()
-    faces = extractor.extract_faces(pil_img)
+    faces = await run_in_threadpool(extractor.extract_faces, pil_img)
     if not faces:
         audit.record(
             request_id=request_id, model=model, domain=loaded.cfg["domain"],
@@ -306,8 +311,10 @@ async def detect_image(
 
     details: List[FaceDetail] = []
     best = None
-    for det in faces:
-        fake_p, real_p = loaded.score(det.image)
+    scored_faces = await run_in_threadpool(
+        lambda: [(det, *loaded.score(det.image)) for det in faces]
+    )
+    for det, fake_p, real_p in scored_faces:
         details.append(FaceDetail(
             box=list(det.box),
             detection_confidence=round(det.confidence, 4),
@@ -335,6 +342,12 @@ async def detect_image(
                 spectral_note = f"spectral-combined P(fake)={combined:.4f} (neural {fake_p:.4f})"
                 fake_p = combined
                 real_p = 1.0 - combined
+                # The combined score has its own distribution, so the neural
+                # threshold does not apply to it.
+                combined_threshold = combiner.get("chosen_threshold")
+                if combined_threshold:
+                    thr = float(combined_threshold)
+                    thr_source = "calibrated (spectral-combined)"
             except Exception as exc:
                 spectral_note = f"spectral branch unavailable: {exc}"
 
@@ -343,7 +356,8 @@ async def detect_image(
     gradcam_b64 = None
     if explain:
         try:
-            overlay, _cam, _cls, _conf = generate_gradcam_for_model(
+            overlay, _cam, _cls, _conf = await run_in_threadpool(
+                generate_gradcam_for_model,
                 loaded.model, model, best_det.image,
                 target_class=config.FAKE_LABEL_IDX, device=loaded.device,
             )

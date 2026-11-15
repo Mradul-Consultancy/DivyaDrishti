@@ -65,6 +65,20 @@ def fit_combiner(
         "intercept": float(clf.intercept_[0]),
         "n_fit": int(len(y)),
     }
+
+    # The combined score has its own distribution, so the neural threshold
+    # does not apply to it. Calibrate the combined score on the same
+    # validation split.
+    from evaluation.calibration import threshold_curve, youden_threshold
+    combined = clf.predict_proba(scaler.transform(x))[:, 1]
+    curve = threshold_curve(combined, np.where(y == 1, config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX))
+    best = youden_threshold(curve)
+    payload["chosen_threshold"] = round(best["threshold"], 6)
+    payload["at_chosen_threshold"] = {
+        "fake_recall": round(best["fake_recall"], 6),
+        "real_recall": round(best["real_recall"], 6),
+        "false_positive_rate": round(best["false_positive_rate"], 6),
+    }
     if out_path is not None:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
