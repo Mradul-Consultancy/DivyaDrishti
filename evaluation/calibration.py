@@ -215,6 +215,164 @@ def calibrate(
     return report
 
 
+
+
+def yolo_fake_probs_chunked(
+    yolo,
+    paths: List[str],
+    fake_idx: int,
+    batch_size: int = 32,
+    device: str = "cpu",
+    imgsz: int = 224,
+) -> List[float]:
+    """
+    P(fake) for each path, predicted in bounded chunks.
+
+    Ultralytics' predictor takes a LIST source as one batch: the forward pass
+    grows with the size of the split and a 4 GB card dies at a few thousand
+    images, no matter what ``batch=`` says. Chunking the paths keeps each
+    forward pass at ``batch_size`` images, which bounds GPU memory
+    independent of the split size.
+    """
+    probs: List[float] = []
+    for start in range(0, len(paths), batch_size):
+        chunk = paths[start:start + batch_size]
+        # stream=True keeps only one Result alive at a time; without it
+        # Ultralytics retains every Result and its tensors.
+        results = yolo.predict(chunk, imgsz=imgsz, batch=batch_size,
+                               device=device, verbose=False, stream=True)
+        probs.extend(float(r.probs.data.cpu().numpy()[fake_idx]) for r in results)
+    return probs
+
+
+def collect_yolo_probabilities(
+    checkpoint: Path,
+    data_dir: Path,
+    device: Optional[str] = None,
+    batch_size: int = 32,
+) -> Dict[str, Any]:
+    """
+    Runs the YOLO classifier over a labelled split and returns P(fake) per
+    sample, in exactly the same order as ``collect_probabilities``.
+
+    The order comes from ``DeepfakeDataset``, which is the canonical order
+    every per-model probability array follows; mixing orders would average
+    probabilities belonging to different images.
+    """
+    from ultralytics import YOLO
+    from training.dataset import DeepfakeDataset
+
+    dataset = DeepfakeDataset(data_dir)
+    paths = [str(p) for p, _ in dataset.samples]
+    labels = [lbl for _, lbl in dataset.samples]
+    if not paths:
+        return {"probs": np.asarray([], dtype=float),
+                "labels": np.asarray([], dtype=int), "n": 0}
+
+    yolo = YOLO(str(checkpoint))
+    names = yolo.names
+    fake_idx = next((k for k, v in names.items() if str(v).lower() == "fake"), 0)
+    probs = yolo_fake_probs_chunked(
+        yolo, paths, fake_idx, batch_size=batch_size, device=device or "cpu"
+    )
+    return {
+        "probs": np.asarray(probs, dtype=float),
+        "labels": np.asarray(labels, dtype=int),   # 0 = fake, 1 = real
+        "n": len(labels),
+    }
+
+
+def calibrate_ensemble(
+    checkpoints: Dict[str, Path],
+    yolo_checkpoint: Path,
+    val_dir: Path,
+    domain: str,
+    target_fpr: float = DEFAULT_TARGET_FPR,
+    min_fake_recall: float = 0.10,
+    device: Optional[torch.device] = None,
+    batch_size: int = 32,
+) -> Dict[str, Any]:
+    """
+    Calibrates the soft-voting ensemble on the validation split.
+
+    The ensemble score is the mean of its members' P(fake), and that mean has
+    a distribution of its own: a member's calibrated threshold does not
+    transfer to it. Reusing the median member threshold left the ensemble
+    calling almost nothing fake (F1 = 0 at the shipped operating point), so
+    the ensemble gets its own validation split calibration like every other
+    model.
+    """
+    member_probs = []
+    labels = None
+    n = 0
+    for model_name, ckpt in sorted(checkpoints.items()):
+        data = collect_probabilities(model_name, ckpt, val_dir, device=device, batch_size=batch_size)
+        member_probs.append(data["probs"])
+        labels = data["labels"]
+        n = data["n"]
+
+    yolo_data = collect_yolo_probabilities(
+        yolo_checkpoint, val_dir,
+        device="cpu" if (device is None or device.type == "cpu") else "0",
+        batch_size=batch_size,
+    )
+    if yolo_data["n"] != n:
+        raise RuntimeError(
+            f"YOLO returned {yolo_data['n']} probabilities for {n} samples; "
+            "the arrays would be misaligned"
+        )
+    member_probs.append(yolo_data["probs"])
+
+    if any(len(p) != n for p in member_probs):
+        raise RuntimeError("per-model probability arrays are misaligned")
+
+    # Soft voting: the unweighted mean of the members' P(fake).
+    ensemble_probs = np.mean(np.vstack(member_probs), axis=0)
+
+    curve = threshold_curve(ensemble_probs, labels)
+    constrained, target_met = choose_threshold(curve, target_fpr, min_fake_recall)
+    default_050 = min(curve, key=lambda r: abs(r["threshold"] - 0.5))
+    youden = youden_threshold(curve)
+
+    def _pack(r):
+        return {
+            "threshold": round(r["threshold"], 6),
+            "fake_recall": round(r["fake_recall"], 6),
+            "real_recall": round(r["real_recall"], 6),
+            "false_positive_rate": round(r["false_positive_rate"], 6),
+            "precision": round(r["precision"], 6),
+        }
+
+    report = {
+        "domain": domain,
+        "model_name": "ensemble (soft voting, mean of members)",
+        "members": sorted(checkpoints.keys()) + ["yolo26n-cls"],
+        "checkpoint": str(yolo_checkpoint.parent),
+        "validation_dir": str(val_dir),
+        "validation_samples": n,
+        "target_false_positive_rate": target_fpr,
+        "target_fpr_achievable": target_met,
+        "chosen_threshold": round(youden["threshold"], 6),
+        "chosen_policy": "youden (maximises TPR - FPR)",
+        "at_chosen_threshold": _pack(youden),
+        "fpr_constrained_threshold": round(constrained["threshold"], 6),
+        "at_fpr_constrained_threshold": _pack(constrained),
+        "at_default_0.5": _pack(default_050),
+        "note": (
+            "Ensemble score = unweighted mean of the members' P(fake), "
+            "calibrated on the validation split like a single model. The test "
+            "split is never used for threshold selection."
+        ),
+    }
+
+    out_dir = config.CHECKPOINT_DIR / domain
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "threshold_ensemble.json"
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report["written_to"] = str(out_path)
+    return report
+
+
 def load_threshold(domain: str, model_name: str = None, default: float = 0.5) -> float:
     """
     Loads the calibrated threshold for a domain/model, falling back to

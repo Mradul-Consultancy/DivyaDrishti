@@ -1,0 +1,39 @@
+{
+  "domain": "dfdc",
+  "model_name": "ensemble (soft voting, mean of members)",
+  "members": [
+    "convnext_tiny.fb_in22k_ft_in1k",
+    "efficientnet_b3.ra2_in1k",
+    "yolo26n-cls"
+  ],
+  "checkpoint": "E:\\deepfake\\runs\\yolo_cls\\dfdc\\deepfake_dfdc\\weights",
+  "validation_dir": "E:\\deepfake\\data\\processed\\dfdc\\val",
+  "validation_samples": 320,
+  "target_false_positive_rate": 0.01,
+  "target_fpr_achievable": true,
+  "chosen_threshold": 0.524415,
+  "chosen_policy": "youden (maximises TPR - FPR)",
+  "at_chosen_threshold": {
+    "threshold": 0.524415,
+    "fake_recall": 0.918182,
+    "real_recall": 0.89,
+    "false_positive_rate": 0.11,
+    "precision": 0.948357
+  },
+  "fpr_constrained_threshold": 0.783529,
+  "at_fpr_constrained_threshold": {
+    "threshold": 0.783529,
+    "fake_recall": 0.609091,
+    "real_recall": 0.99,
+    "false_positive_rate": 0.01,
+    "precision": 0.992593
+  },
+  "at_default_0.5": {
+    "threshold": 0.496526,
+    "fake_recall": 0.918182,
+    "real_recall": 0.87,
+    "false_positive_rate": 0.13,
+    "precision": 0.939535
+  },
+  "note": "Ensemble score = unweighted mean of the members' P(fake), calibrated on the validation split like a single model. The test split is never used for threshold selection."
+}

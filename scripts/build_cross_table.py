@@ -53,7 +53,7 @@ import torch
 import config
 from utils.helpers import setup_logger, ensure_dirs
 from evaluation.evaluate_cross_dataset import resolve_test_split
-from evaluation.calibration import load_threshold
+from evaluation.calibration import load_threshold, yolo_fake_probs_chunked
 
 # The console summary contains box-drawing/arrow characters. On Windows the
 # default console encoding is cp1252, which cannot represent them and raises
@@ -157,8 +157,11 @@ def resolve_operating_points(model_names: Optional[List[str]] = None) -> Dict[st
     points: Dict[str, Dict[str, float]] = {}
     for domain in TRAIN_DATASETS:
         per_model = {name: load_threshold(domain, name) for name in names}
-        ensemble_threshold = sorted(per_model.values())[len(per_model) // 2]
-        per_model["ensemble"] = ensemble_threshold
+        # The ensemble has its own calibration: the mean of the members'
+        # P(fake) has a different distribution, and a member's threshold
+        # starved it (F1 = 0 at a member's 0.93 on Celeb-DF).
+        per_model["ensemble"] = load_threshold(domain, "ensemble",
+                                              default=sorted(per_model.values())[len(per_model) // 2])
         points[domain] = per_model
     return points
 
@@ -184,6 +187,25 @@ def resolve_domain_notes() -> Dict[str, bool]:
         ).exists()
         notes[train_ds] = bool(has_timm and has_yolo)
     return notes
+
+
+# Per-model P(fake) arrays, keyed by (model key, test directory). The ensemble
+# reuses these instead of re-running inference: it is ~3x cheaper and
+# guarantees the ensemble is built from exactly the same per-model scores that
+# the individual rows report.
+_PROB_CACHE: Dict[Tuple[str, str], np.ndarray] = {}
+
+
+def _cache_key(model_key: str, test_dir: Path) -> Tuple[str, str]:
+    return (model_key, str(test_dir))
+
+
+def _labels_for(eval_path: Path) -> np.ndarray:
+    """Ground-truth labels for a split directory, in dataset order."""
+    from training.dataset import DeepfakeDataset
+    ds = DeepfakeDataset(eval_path)
+    return np.asarray([lbl for _, lbl in ds.samples], dtype=int)
+
 
 
 def _compute_metrics(y_true: np.ndarray, y_probs: np.ndarray, threshold: float = 0.5) -> Dict[str, Any]:
@@ -339,20 +361,20 @@ def evaluate_yolo_on_dir(
     all_labels = [lbl for _, lbl in image_paths]
 
     device_str = "0" if (device.type == "cuda") else "cpu"
-    # stream=True yields Results lazily. Without it Ultralytics keeps every
-    # Result object (and its GPU tensors) alive until the call returns, which
-    # exhausts VRAM on a 4 GB card for a few thousand images.
-    results = yolo.predict(all_paths, imgsz=224, batch=batch_size, device=device_str,
-                           verbose=False, stream=True)
+    # Chunked prediction: Ultralytics takes a LIST source as one batch, so a
+    # single forward pass grows with the split and dies on a 4 GB card no
+    # matter what batch= says. yolo_fake_probs_chunked bounds each pass.
+    probs_all = yolo_fake_probs_chunked(
+        yolo, all_paths, fake_idx, batch_size=batch_size, device=device_str
+    )
+    y_probs_all.extend(probs_all)
+    y_true.extend(all_labels)
 
-    for res, true_lbl in zip(results, all_labels):
-        probs = res.probs.data.cpu().numpy()
-        y_probs_all.append(float(probs[fake_idx]))
-        y_true.append(true_lbl)
-
-    res = _compute_metrics(np.array(y_true), np.array(y_probs_all))
+    res = _compute_metrics(np.array(y_true), np.array(y_probs_all), threshold=threshold)
+    res["threshold"] = threshold
     res["n_real"] = n_real
     res["n_fake"] = n_fake
+    _PROB_CACHE[_cache_key("yolo26n-cls", eval_path)] = np.array(y_probs_all)
     return res
 
 
@@ -464,10 +486,9 @@ def evaluate_ensemble_on_dir(
         samples = _collect_samples(eval_path)
         if samples:
             device_str = "0" if (device.type == "cuda") else "cpu"
-            # stream=True keeps only one Result alive at a time.
-            results = yolo.predict([str(p) for p, _ in samples], imgsz=224, batch=batch_size,
-                                   device=device_str, verbose=False, stream=True)
-            arr = np.array([float(r.probs.data.cpu().numpy()[fake_idx]) for r in results])
+            arr = np.array(yolo_fake_probs_chunked(
+                yolo, [str(p) for p, _ in samples], fake_idx,
+                batch_size=batch_size, device=device_str))
             model_probs["YOLO26n-cls"] = arr
             _PROB_CACHE[_cache_key("yolo26n-cls", eval_path)] = arr
 
@@ -802,18 +823,47 @@ def run_cross_table(args):
     results: Dict[str, Dict[str, Dict[str, Any]]] = {}
     if checkpoint_path.exists() and not getattr(args, "force", False):
         try:
-            results = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-            logger.info(f"Resuming from {checkpoint_path}")
-        except Exception:
+            payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and "results" in payload:
+                results = payload["results"]
+                for key, arr in (payload.get("probs") or {}).items():
+                    mk, td = key.split("::", 1)
+                    _PROB_CACHE[(mk, td)] = np.asarray(arr, dtype=float)
+                logger.info(
+                    f"Resuming from {checkpoint_path}: "
+                    f"{sum(1 for t in results.values() for m in t.values() if m)} cells, "
+                    f"{len(_PROB_CACHE)} cached probability arrays"
+                )
+            else:
+                results = payload
+                logger.info(f"Resuming from {checkpoint_path}")
+        except Exception as exc:
+            logger.warning(f"Could not resume from {checkpoint_path}: {exc}")
             results = {}
 
     def _save_checkpoint():
         try:
-            checkpoint_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+            payload = {
+                "results": results,
+                # The per-model P(fake) arrays let a resumed run rebuild the
+                # ensemble without re-running inference.
+                "probs": {f"{k[0]}::{k[1]}": v.tolist()
+                          for k, v in _PROB_CACHE.items()},
+            }
+            checkpoint_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as exc:
             logger.warning(f"Could not write the partial checkpoint: {exc}")
 
+    only = args.only
+    only_pair = None
+    if only:
+        only_pair = tuple(part.strip() for part in only.split(":", 1))
+        if len(only_pair) != 2:
+            parser.error("--only must be of the form TRAIN:TEST")
+
     for train_ds in TRAIN_DATASETS:
+        if only_pair and train_ds != only_pair[0]:
+            continue
         results.setdefault(train_ds, {})
         logger.info(f"\n{'='*70}")
         logger.info(f"  TRAIN DOMAIN: {train_ds.upper()}")
@@ -844,6 +894,8 @@ def run_cross_table(args):
         )
 
         for test_name, test_base_dir in TEST_DATASETS.items():
+            if only_pair and test_name != only_pair[1]:
+                continue
             done = results[train_ds].get(test_name) or {}
             expected = {"EfficientNet-B3", "ConvNeXt-Tiny", "YOLO26n-cls", "Ensemble"}
             if expected.issubset(set(done.keys())) and all(done.get(k) for k in expected):
@@ -947,6 +999,11 @@ def main():
         epilog=__doc__,
     )
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument(
+        "--only", type=str, default=None,
+        help="Restrict the run to one cell, as TRAIN:TEST (e.g. celebdf:CelebDF). "
+             "Repeated invocations accumulate in the checkpoint.",
+    )
     parser.add_argument("--device",     type=str, default=str(config.DEVICE))
     args = parser.parse_args()
     run_cross_table(args)

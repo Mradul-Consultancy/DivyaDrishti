@@ -1,0 +1,39 @@
+{
+  "domain": "celebdf",
+  "model_name": "ensemble (soft voting, mean of members)",
+  "members": [
+    "convnext_tiny.fb_in22k_ft_in1k",
+    "efficientnet_b3.ra2_in1k",
+    "yolo26n-cls"
+  ],
+  "checkpoint": "E:\\deepfake\\runs\\yolo_cls\\celebdf\\deepfake_celebdf\\weights",
+  "validation_dir": "E:\\deepfake\\data\\processed\\celebdf\\val",
+  "validation_samples": 4655,
+  "target_false_positive_rate": 0.01,
+  "target_fpr_achievable": true,
+  "chosen_threshold": 0.852682,
+  "chosen_policy": "youden (maximises TPR - FPR)",
+  "at_chosen_threshold": {
+    "threshold": 0.852682,
+    "fake_recall": 0.762573,
+    "real_recall": 0.802632,
+    "false_positive_rate": 0.197368,
+    "precision": 0.977511
+  },
+  "fpr_constrained_threshold": 0.963278,
+  "at_fpr_constrained_threshold": {
+    "threshold": 0.963278,
+    "fake_recall": 0.131228,
+    "real_recall": 0.992105,
+    "false_positive_rate": 0.007895,
+    "precision": 0.994681
+  },
+  "at_default_0.5": {
+    "threshold": 0.500992,
+    "fake_recall": 0.992515,
+    "real_recall": 0.360526,
+    "false_positive_rate": 0.639474,
+    "precision": 0.945831
+  },
+  "note": "Ensemble score = unweighted mean of the members' P(fake), calibrated on the validation split like a single model. The test split is never used for threshold selection."
+}

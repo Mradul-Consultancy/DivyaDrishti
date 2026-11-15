@@ -1,12 +1,12 @@
 Trained on,Test dataset,Model,Checkpoint,Accuracy (%),Balanced Accuracy (%),Recall Fake (%),Recall Real (%),F1-Score (%),ROC-AUC,Brier Score,Threshold
-CELEBDF,CelebDF,EfficientNet-B3,domain-specific,63.68,70.21,62.30,78.12,75.79,0.7683,0.1448,0.9323
-CELEBDF,CelebDF,ConvNeXt-Tiny,domain-specific,85.86,85.12,86.01,84.24,91.74,0.9196,0.0539,0.8183
+CELEBDF,CelebDF,EfficientNet-B3,domain-specific,,,,,,,,
+CELEBDF,CelebDF,ConvNeXt-Tiny,domain-specific,,,,,,,,
 CELEBDF,CelebDF,YOLO26n-cls,domain-specific,,,,,,,,
 CELEBDF,CelebDF,Ensemble,domain-specific,,,,,,,,
-CELEBDF,DFDC,EfficientNet-B3,domain-specific,,,,,,,,
-CELEBDF,DFDC,ConvNeXt-Tiny,domain-specific,,,,,,,,
-CELEBDF,DFDC,YOLO26n-cls,domain-specific,,,,,,,,
-CELEBDF,DFDC,Ensemble,domain-specific,,,,,,,,
+CELEBDF,DFDC,EfficientNet-B3,domain-specific,46.67,46.67,6.67,86.67,11.11,0.3811,0.4488,0.9323
+CELEBDF,DFDC,ConvNeXt-Tiny,domain-specific,50.00,50.00,0.00,100.00,0.00,0.5933,0.2510,0.8183
+CELEBDF,DFDC,YOLO26n-cls,domain-specific,58.33,58.33,100.00,16.67,70.59,0.6489,0.2960,0.5000
+CELEBDF,DFDC,Ensemble,domain-specific,50.00,50.00,0.00,100.00,0.00,0.5467,0.2726,0.9323
 CELEBDF,Real-Life,EfficientNet-B3,domain-specific,,,,,,,,
 CELEBDF,Real-Life,ConvNeXt-Tiny,domain-specific,,,,,,,,
 CELEBDF,Real-Life,YOLO26n-cls,domain-specific,,,,,,,,
