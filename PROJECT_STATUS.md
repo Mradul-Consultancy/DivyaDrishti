@@ -344,4 +344,13 @@ set (AI-generated faces rather than frame-level manipulations).
 4. **Refresh the Kaggle kernels.** `deepfake-pilot-gpu` and
    `deepfake-celebdf-gpu-training` still carry the old mount logic; the working
    configuration is `kaggle_train/` (`deepfake-train-kaggle`).
+5. **Independent reproduction status (2026-11-15).** Kaggle kernel v12 re-ran
+   the whole cross-dataset table on CPU, fresh environment, from the v4 code
+   dataset: all 18 single-model/YOLO cells matched the local GPU artefact with
+   a maximum AUC gap of 0.0011 (`reports/kaggle_reproduction.json`). The run
+   also caught two packaging defects in the v4 snapshot - a fresh-run
+   ensemble crash (`_PROB_CACHE` NameError) and missing calibration JSONs
+   (threshold fallback to 0.5) - both fixed and regression-tested; kernel
+   v13 re-runs with the corrected `deepfake-code-v5` dataset to reproduce
+   the ensemble rows and the shipped operating points.
 

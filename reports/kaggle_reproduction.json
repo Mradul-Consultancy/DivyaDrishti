@@ -1,0 +1,46 @@
+{
+  "generated_utc": "2026-11-15T18:20:00Z",
+  "purpose": "Independent reproduction of the cross-dataset table on Kaggle (CPU-only, no internet, fresh environment) to verify the published numbers were not produced by local-side artefacts.",
+  "kernel": "mradulmanimishra/deepfake-train-kaggle",
+  "kernel_version_compared": 12,
+  "kernel_code_dataset": "mradulmanimishra/deepfake-code-v4",
+  "reference_artefact": "reports/cross_dataset/cross_table.csv",
+  "kernel_artefact": "kaggle_kernel_log2/repo/reports/cross_dataset/cross_table.csv (downloaded kernel output)",
+  "comparison": {
+    "cells_compared": 24,
+    "single_model_and_yolo_cells_matched": 18,
+    "max_auc_difference": 0.0011,
+    "tolerance_used": 0.005,
+    "per_cell_auc": [
+      {"trained": "CELEBDF", "test": "CelebDF", "model": "EfficientNet-B3", "local": 0.7682, "kernel": 0.7684},
+      {"trained": "CELEBDF", "test": "CelebDF", "model": "ConvNeXt-Tiny", "local": 0.9196, "kernel": 0.9196},
+      {"trained": "CELEBDF", "test": "CelebDF", "model": "YOLO26n-cls", "local": 0.9403, "kernel": 0.9403},
+      {"trained": "CELEBDF", "test": "DFDC", "model": "EfficientNet-B3", "local": 0.3811, "kernel": 0.3822},
+      {"trained": "CELEBDF", "test": "DFDC", "model": "ConvNeXt-Tiny", "local": 0.5933, "kernel": 0.5933},
+      {"trained": "CELEBDF", "test": "DFDC", "model": "YOLO26n-cls", "local": 0.6489, "kernel": 0.6489},
+      {"trained": "CELEBDF", "test": "Real-Life", "model": "EfficientNet-B3", "local": 0.6260, "kernel": 0.6262},
+      {"trained": "CELEBDF", "test": "Real-Life", "model": "ConvNeXt-Tiny", "local": 0.6533, "kernel": 0.6533},
+      {"trained": "CELEBDF", "test": "Real-Life", "model": "YOLO26n-cls", "local": 0.5114, "kernel": 0.5113},
+      {"trained": "DFDC", "test": "CelebDF", "model": "EfficientNet-B3", "local": 0.6064, "kernel": 0.6064},
+      {"trained": "DFDC", "test": "CelebDF", "model": "ConvNeXt-Tiny", "local": 0.7710, "kernel": 0.7710},
+      {"trained": "DFDC", "test": "CelebDF", "model": "YOLO26n-cls", "local": 0.6697, "kernel": 0.6697},
+      {"trained": "DFDC", "test": "DFDC", "model": "EfficientNet-B3", "local": 0.6044, "kernel": 0.6044},
+      {"trained": "DFDC", "test": "DFDC", "model": "ConvNeXt-Tiny", "local": 0.8233, "kernel": 0.8233},
+      {"trained": "DFDC", "test": "DFDC", "model": "YOLO26n-cls", "local": 0.8667, "kernel": 0.8678},
+      {"trained": "DFDC", "test": "Real-Life", "model": "EfficientNet-B3", "local": 0.4496, "kernel": 0.4497},
+      {"trained": "DFDC", "test": "Real-Life", "model": "ConvNeXt-Tiny", "local": 0.3929, "kernel": 0.3929},
+      {"trained": "DFDC", "test": "Real-Life", "model": "YOLO26n-cls", "local": 0.3626, "kernel": 0.3626}
+    ],
+    "ensemble_cells": {
+      "status": "empty in kernel v12",
+      "cause": "the v4 code snapshot referenced _PROB_CACHE without a module-level definition, so the fresh-run ensemble path crashed with NameError; the current code defines the cache at module level (regression test: tests/test_review_fixes.py::TestCrossTableFreshRun)",
+      "fix_shipped_in": "deepfake-code-v5 + kernel v13"
+    },
+    "threshold_column": {
+      "status": "kernel v12 reported 0.5 everywhere",
+      "cause": "the calibration threshold JSONs were not part of the v4 code dataset, so resolve_operating_points fell back to 0.5",
+      "fix": "scripts/package_for_kaggle.py now ships models/checkpoints/**/threshold_*.json (9 files, a few KB); deepfake-code-v5 carries them"
+    }
+  },
+  "conclusion": "Every single-model and YOLO cell of the published table was reproduced independently on different hardware (CPU vs GPU) with a maximum AUC gap of 0.0011. Kernel v13 re-runs with the current code to additionally reproduce the ensemble rows and the per-model operating points."
+}

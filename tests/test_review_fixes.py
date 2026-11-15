@@ -158,6 +158,46 @@ class TestDatasetLabelSafety:
         )
 
 
+class TestCrossTableFreshRun:
+    """
+    The independent Kaggle reproduction (kernel v12, fresh environment, no
+    probability cache) crashed with ``NameError: name '_PROB_CACHE' is not
+    defined`` in ``evaluate_ensemble_on_dir``: the stale packaged code
+    referenced the cache global without ever defining it at module level.
+    The current script defines it at import time - lock that invariant so a
+    fresh run (no cache file, no prior partial state) can never regress.
+    """
+
+    def test_prob_cache_is_defined_at_module_level(self):
+        import scripts.build_cross_table as bct
+        assert hasattr(bct, "_PROB_CACHE"), (
+            "scripts/build_cross_table.py must define _PROB_CACHE at module "
+            "level; otherwise the ensemble path crashes on a fresh run that "
+            "has no probability cache yet (the exact failure kernel v12 hit)."
+        )
+        assert isinstance(bct._PROB_CACHE, dict)
+
+    def test_thresholds_ship_in_the_kaggle_package(self):
+        """
+        The calibration JSONs are what makes the kernel reproduce the
+        SHIPPED operating points. If they vanish from the packaged zip the
+        kernel silently falls back to threshold 0.5 - a different, unquoted
+        operating point. The packager must keep models/checkpoints/**/threshold_*.json.
+        """
+        import zipfile
+        from scripts.package_for_kaggle import OUT
+
+        if not Path(OUT).exists():
+            pytest.skip("deepfake_code.zip not built yet - run scripts/package_for_kaggle.py")
+        with zipfile.ZipFile(OUT) as zf:
+            names = zf.namelist()
+        thresholds = [n for n in names if "threshold_" in n and n.endswith(".json")]
+        assert len(thresholds) >= 9, (
+            f"the Kaggle package must carry the calibration threshold JSONs "
+            f"(found {len(thresholds)}: {thresholds})"
+        )
+
+
 def _make_image(w, h):
     from PIL import Image
     return Image.fromarray(np.random.randint(0, 255, (h, w, 3), dtype=np.uint8))
