@@ -140,10 +140,26 @@ class TestC2PA:
         assert info.present is False
         assert info.signature_verified is False
 
-    def test_c2pa_module_flags_a_manifest_marker(self):
+    def test_c2pa_module_flags_a_manifest_in_an_app11_segment(self):
         from api.c2pa import inspect_bytes
-        info = inspect_bytes(b"\xff\xd8\xff\xe0" + b"jumb" + b"c2pa" + b"\x00" * 64)
+        # A JPEG APP11 segment carrying a JUMBF box of type "c2pa".
+        payload = b"jumb" + b"c2pa" + b"\x00" * 64
+        # JPEG segment length covers the length field itself.
+        seg = b"\xff\xeb" + (len(payload) + 2).to_bytes(2, "big") + payload
+        app0 = b"\xff\xe0" + (16).to_bytes(2, "big") + b"JFIF\x00" + b"\x00" * 9
+        jpeg = b"\xff\xd8" + app0 + seg + b"\xff\xd9"
+        info = inspect_bytes(jpeg)
         assert info.present is True
         assert info.container == "jpeg"
         # Detection is not verification.
         assert info.signature_verified is False
+
+    def test_c2pa_ignores_a_mention_outside_the_manifest_structures(self):
+        """A stray mention of 'c2pa' in a comment must not look like a manifest."""
+        from api.c2pa import inspect_bytes
+        payload = b"a photo mentioning c2pa in a comment"
+        seg = b"\xff\xfe" + (len(payload) + 2).to_bytes(2, "big") + payload  # APP14 (comment)
+        app0 = b"\xff\xe0" + (16).to_bytes(2, "big") + b"JFIF\x00" + b"\x00" * 9
+        jpeg = b"\xff\xd8" + app0 + seg + b"\xff\xd9"
+        info = inspect_bytes(jpeg)
+        assert info.present is False

@@ -1,0 +1,35 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Datasets and extracted biometric crops - never bake these into an image.
+# data/ is ~14 GB of face crops.
+data/
+staging_dataset/
+train_out*/
+kaggle_crops*.zip
+*.zip
+
+# Generated artefacts (regenerated at runtime)
+reports/
+logs/
+
+# Vendored third-party packages - the image installs them from
+# requirements.txt instead, which keeps the image small and lets pip
+# resolve a consistent set.
+vendor/
+
+# Local scratch
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.log
+*.pth
+*.ipynb_checkpoints/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

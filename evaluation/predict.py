@@ -154,7 +154,7 @@ def _resolve_domain(checkpoint: Path) -> Optional[str]:
 def run_inference(args):
     device = torch.device(args.device)
     print(f"Loading checkpoint {args.checkpoint} onto {device}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model_name = checkpoint.get("model_name", args.model)
     model = get_model(model_name, num_classes=config.NUM_CLASSES, pretrained=False).to(device)
     model.load_state_dict(checkpoint["state_dict"])

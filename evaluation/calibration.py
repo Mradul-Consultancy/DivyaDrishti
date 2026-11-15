@@ -59,7 +59,7 @@ def collect_probabilities(
 
     device = device or config.DEVICE
     model, transform = _resolve_model_transform(model_name)
-    ckpt = torch.load(checkpoint, map_location="cpu")
+    ckpt = torch.load(checkpoint, map_location="cpu", weights_only=True)
     model.load_state_dict(ckpt.get("state_dict", ckpt))
     model = model.to(device).eval()
 

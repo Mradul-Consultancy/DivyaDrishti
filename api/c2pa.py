@@ -60,34 +60,72 @@ class C2PAInfo:
         }
 
 
+
+def _jpeg_app_segments(data: bytes):
+    """Returns the payload of every JPEG APP11 segment (where JUMBF lives)."""
+    segments = []
+    i = 2
+    n = len(data)
+    while i + 4 <= n:
+        if data[i] != 0xFF:
+            break
+        marker = data[i + 1]
+        if marker == 0xDA:          # start of scan - no more metadata
+            break
+        if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+            i += 2
+            continue
+        seg_len = int.from_bytes(data[i + 2:i + 4], "big")
+        if seg_len < 2 or i + 2 + seg_len > n:
+            break
+        if marker == 0xEB:           # APP11
+            segments.append(data[i + 4:i + 2 + seg_len])
+        i += 2 + seg_len
+    return segments
+
+
+def _png_itxt_chunks(data: bytes):
+    """Returns the payload of every PNG iTXt chunk (where JUMBF may live)."""
+    chunks = []
+    i = 8
+    n = len(data)
+    while i + 8 <= n:
+        length = int.from_bytes(data[i:i + 4], "big")
+        ctype = data[i + 4:i + 8]
+        payload = data[i + 8:i + 8 + length]
+        if ctype == b"iTXt":
+            chunks.append(payload)
+        i += 12 + length   # length + type + data + crc
+        if ctype == b"IEND":
+            break
+    return chunks
+
+
 def _scan_bytes(data: bytes) -> C2PAInfo:
     """Scans raw bytes for C2PA/JUMBF markers."""
     info = C2PAInfo()
 
     # JPEG APP11 segments carry a JUMBF "jumb" superbox; the C2PA manifest
     # lives inside as a "c2pa" box.
+    # A C2PA manifest lives in a JUMBF box whose type is literally "c2pa",
+    # inside a JPEG APP11 segment or a PNG iTXt chunk. Searching the whole
+    # file for the substring "c2pa" would fire on any JPEG whose EXIF or
+    # comment happens to mention it, so the search is restricted to the
+    # structures that can actually carry a manifest.
     if data[:2] == b"\xff\xd8":
         info.container = "jpeg"
-        info.signatures = data.count(b"c2pa") + data.count(b"C2PA")
+        segments = _jpeg_app_segments(data)
+        info.signatures = sum(seg.count(b"c2pa") + seg.count(b"C2PA") for seg in segments)
     elif data[:8] == b"\x89PNG\r\n\x1a\n":
         info.container = "png"
-        info.signatures = data.count(b"c2pa") + data.count(b"C2PA")
+        chunks = _png_itxt_chunks(data)
+        info.signatures = sum(c.count(b"c2pa") + c.count(b"C2PA") for c in chunks)
     else:
         info.container = "unknown"
-        info.signatures = data.count(b"c2pa") + data.count(b"C2PA")
 
     if info.signatures:
         info.present = True
         info.raw_manifest_bytes = _extract_jumbf_payload_size(data)
-
-    lowered = data[:4_000_000].lower()
-    for marker in C2PA_MARKERS:
-        idx = lowered.find(marker.encode())
-        if idx >= 0:
-            info.present = True
-            if info.container == "unknown":
-                info.container = "unknown"
-            break
 
     # Try to pull the generator name out of the manifest JSON, if present.
     m = re.search(rb'"generator"\s*:\s*"([^"]{1,120})"', data)

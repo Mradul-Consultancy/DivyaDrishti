@@ -89,6 +89,13 @@ Examples:
     p_pred.add_argument("--output-dir", type=str, help="Directory to save annotated images")
     p_pred.add_argument("--no-crop", action="store_true", help="Skip face extraction")
     p_pred.add_argument("--device", type=str, default=str(config.DEVICE))
+    p_pred.add_argument("--threshold", type=float, default=None,
+                        help="Decision threshold. Defaults to the calibrated value for the "
+                             "checkpoint's domain, else 0.5.")
+    p_pred.add_argument("--margin", type=float, default=0.2,
+                        help="Contextual margin around the detected face (default: 0.2)")
+    p_pred.add_argument("--min-confidence", type=float, default=0.90,
+                        help="Minimum face-detector confidence (default: 0.90)")
 
     # Command: extract-videos
     p_vid = subparsers.add_parser("extract-videos", help="Extract N frames per video, crop faces with MTCNN, and split by identity/source")

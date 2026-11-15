@@ -77,7 +77,7 @@ def load_detector_model(model_name: str, checkpoint_path: str):
         return None, None, device
     try:
         model = get_model(model_name=model_name, num_classes=2, pretrained=False)
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
         
         if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
@@ -101,6 +101,25 @@ def load_detector_model(model_name: str, checkpoint_path: str):
 @st.cache_resource
 def get_face_extractor():
     return FaceExtractor(margin_ratio=0.2)
+
+
+# Temporary files created during this session (uploaded videos). Streamlit
+# re-runs the script on every interaction, so the paths are tracked at module
+# level and the files are removed on interpreter exit.
+_TEMP_VIDEOS: list = []
+
+
+def _cleanup_temp_videos():
+    for path in list(_TEMP_VIDEOS):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    _TEMP_VIDEOS.clear()
+
+
+import atexit
+atexit.register(_cleanup_temp_videos)
 
 
 def main():
@@ -225,18 +244,23 @@ def main():
                                 "crops only, so scoring this frame would be meaningless."
                             )
                             st.stop()
-                        face_crop = faces[0].image
+                        # Score EVERY detected face and take the verdict from
+                        # the most suspicious one - the same rule as
+                        # evaluation/predict.py and api/server.py.
+                        scored = []
+                        for det in faces:
+                            t = transform(det.image).unsqueeze(0).to(device)
+                            with torch.no_grad():
+                                pr = torch.softmax(model(t), dim=1).squeeze(0)
+                            scored.append((det, float(pr[FAKE_CLASS_IDX].item()),
+                                          float(pr[REAL_CLASS_IDX].item())))
+                        det, prob_fake, prob_real = max(scored, key=lambda s: s[1])
+
+                        face_crop = det.image
                         caption = "Analyzed Facial Region"
                         if len(faces) > 1:
                             caption += f" (of {len(faces)} faces detected)"
                         st.image(face_crop, caption=caption, width=180)
-
-                        tensor = transform(face_crop).unsqueeze(0).to(device)
-                        with torch.no_grad():
-                            outputs = model(tensor)
-                            probs = torch.softmax(outputs, dim=1).squeeze(0)
-                            prob_fake = float(probs[FAKE_CLASS_IDX].item())
-                            prob_real = float(probs[REAL_CLASS_IDX].item())
 
                         is_fake = prob_fake >= threshold
 
@@ -289,9 +313,17 @@ def main():
         uploaded_video = st.file_uploader("Select MP4, AVI, or MOV video", type=["mp4", "avi", "mov"])
 
         if uploaded_video:
+            # The uploaded video is biometric content, so it is written to a
+            # temporary file that is deleted as soon as the page is done with
+            # it. A NamedTemporaryFile(delete=False) would leave it behind in
+            # %TEMP% indefinitely.
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            tfile.write(uploaded_video.read())
+            try:
+                tfile.write(uploaded_video.read())
+            finally:
+                tfile.close()
             video_path = tfile.name
+            _TEMP_VIDEOS.append(video_path)
 
             col_v1, col_v2 = st.columns([1, 1])
             with col_v1:
@@ -334,7 +366,10 @@ def main():
                             if scores:
                                 avg_fake = float(np.mean(scores))
                                 max_fake = float(np.max(scores))
-                                is_fake_video = avg_fake >= threshold
+                                # Same rule as api/server.py: the verdict comes
+                                # from the most suspicious frame, so the two
+                                # entry points cannot disagree.
+                                is_fake_video = max_fake >= threshold
 
                                 st.write("### Video Assessment Results")
                                 if is_fake_video:

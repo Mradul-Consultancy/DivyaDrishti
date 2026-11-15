@@ -98,7 +98,7 @@ class ModelEnsembleEvaluator:
         # 2. Load ConvNeXt-Tiny
         self.logger.info(f"Loading ConvNeXt-Tiny from {convnext_checkpoint}...")
         self.convnext_model = timm.create_model(convnext_model_name, pretrained=False, num_classes=2)
-        ckpt_cn = torch.load(convnext_checkpoint, map_location=self.device)
+        ckpt_cn = torch.load(convnext_checkpoint, map_location=self.device, weights_only=True)
         self.convnext_model.load_state_dict(ckpt_cn.get("state_dict", ckpt_cn))
         self.convnext_model = self.convnext_model.to(self.device).eval()
         cn_cfg = resolve_data_config(self.convnext_model.pretrained_cfg)
@@ -107,7 +107,7 @@ class ModelEnsembleEvaluator:
         # 3. Load EfficientNet-B3
         self.logger.info(f"Loading EfficientNet-B3 from {effnet_checkpoint}...")
         self.effnet_model = timm.create_model(effnet_model_name, pretrained=False, num_classes=2)
-        ckpt_eff = torch.load(effnet_checkpoint, map_location=self.device)
+        ckpt_eff = torch.load(effnet_checkpoint, map_location=self.device, weights_only=True)
         self.effnet_model.load_state_dict(ckpt_eff.get("state_dict", ckpt_eff))
         self.effnet_model = self.effnet_model.to(self.device).eval()
         eff_cfg = resolve_data_config(self.effnet_model.pretrained_cfg)
@@ -155,7 +155,7 @@ class ModelEnsembleEvaluator:
         """
         Runs inference over all images in dataset_dir across real/ and fake/ subfolders.
         Returns:
-            y_true: (N,) binary ground truth labels (0=real, 1=fake)
+            y_true: (N,) binary ground truth labels (0=fake, 1=real)
             probs_matrix: (N, 3) matrix of fake probabilities [YOLO, ConvNeXt, EfficientNet]
             samples_info: List of dicts with filepath, filename, label
         """

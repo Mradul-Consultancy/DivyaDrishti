@@ -39,7 +39,7 @@ from training.train_timm import get_timm_transforms
 
 def _load_model(model_name: str, checkpoint: Path, device):
     model = get_model(model_name, num_classes=2, pretrained=False)
-    ckpt = torch.load(checkpoint, map_location="cpu")
+    ckpt = torch.load(checkpoint, map_location="cpu", weights_only=True)
     model.load_state_dict(ckpt.get("state_dict", ckpt))
     return model.to(device).eval()
 

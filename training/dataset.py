@@ -30,16 +30,12 @@ class DeepfakeDataset(Dataset):
         if class_to_idx is not None:
             self.class_to_idx = class_to_idx
         else:
-            # Matches torchvision.datasets.ImageFolder convention:
-            # sorts folder names alphabetically ('fake' < 'real' -> fake=0, real=1)
-            if self.root_dir.exists():
-                dir_classes = sorted([d.name for d in self.root_dir.iterdir() if d.is_dir()])
-                if dir_classes and set(dir_classes).issubset(set(config.CLASS_NAMES)):
-                    self.class_to_idx = {c: i for i, c in enumerate(dir_classes)}
-                else:
-                    self.class_to_idx = config.CLASS_TO_IDX.copy()
-            else:
-                self.class_to_idx = config.CLASS_TO_IDX.copy()
+            # The label convention is fixed project-wide: fake=0, real=1
+            # (config.CLASS_TO_IDX). The directory listing decides only WHICH
+            # classes are present, never their indices - deriving the indices
+            # from the listing would label every image of a single-class
+            # split 'fake', silently inverting the labels.
+            self.class_to_idx = config.CLASS_TO_IDX.copy()
 
         self.samples: List[Tuple[Path, int]] = []
         self._load_samples()
@@ -65,9 +61,11 @@ class DeepfakeDataset(Dataset):
         try:
             image = Image.open(img_path).convert("RGB")
         except Exception as e:
-            # Handle corrupted image by loading a fallback blank image
-            print(f"[Warning] Error loading {img_path}: {e}. Returning blank placeholder.")
-            image = Image.new("RGB", config.IMAGE_SIZE, (0, 0, 0))
+            # A corrupted file must NOT keep its label: substituting a black
+            # placeholder while retaining the label teaches the model that
+            # "black frame = <label>", and silently mis-scores the sample at
+            # evaluation time.
+            raise RuntimeError(f"could not read image {img_path}: {e}") from e
 
         if self.transform:
             image = self.transform(image)

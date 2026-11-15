@@ -131,7 +131,7 @@ def evaluate_model(args):
 
     # Load Model
     logger.info(f"Loading checkpoint from {args.checkpoint}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model_name = checkpoint.get("model_name", args.model)
     model = get_model(model_name, num_classes=config.NUM_CLASSES, pretrained=False).to(device)
     model.load_state_dict(checkpoint["state_dict"])
@@ -260,124 +260,6 @@ def evaluate_model(args):
     logger.info(f"Saved markdown report: {report_md_path}")
 
     # Print summary to console (unchanged)
-    print("\n" + "=" * 50)
-    print("           EVALUATION RESULTS")
-    print("=" * 50)
-    print(f"Accuracy:  {accuracy * 100:.2f}%")
-    print(f"Precision: {precision * 100:.2f}%")
-    print(f"Recall:    {recall * 100:.2f}%")
-    print(f"F1-Score:  {f1 * 100:.2f}%")
-    print(f"ROC-AUC:   {roc_auc:.4f}")
-    print("=" * 50 + "\n")
-    ensure_dirs(args.reports_dir)
-    log_path = Path(args.reports_dir) / "evaluation.log"
-    logger = setup_logger("DeepfakeEvaluator", log_file=log_path)
-    logger.info("Initializing Evaluation Routine...")
-
-    device = torch.device(args.device)
-
-    # Load dataset
-    test_dir = Path(args.data_dir) / "test" if (Path(args.data_dir) / "test").exists() else Path(args.data_dir)
-
-    logger.info(f"Loaded {len(test_dataset)} test samples from {test_dir}")
-    if len(test_dataset) == 0:
-        logger.error(f"No test images found in {test_dir}! Please check test directory.")
-        return
-
-    # Load Model
-    logger.info(f"Loading checkpoint from {args.checkpoint}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device)
-    model_name = checkpoint.get("model_name", args.model)
-    model = get_model(model_name, num_classes=config.NUM_CLASSES, pretrained=False).to(device)
-    model.load_state_dict(checkpoint["state_dict"])
-    model.eval()
-
-    # Rebuild the dataset with the transform that matches training (see
-    # get_eval_transform).
-    test_transform = get_eval_transform(model, model_name)
-    test_dataset = DeepfakeDataset(test_dir, transform=test_transform)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-
-    y_true = []
-    y_pred = []
-    y_probs = []
-
-    softmax = torch.nn.Softmax(dim=1)
-
-    with torch.no_grad():
-        for images, labels in test_loader:
-            images = images.to(device)
-            outputs = model(images)
-            probs = softmax(outputs)
-
-            _, preds = torch.max(outputs, 1)
-
-            y_true.extend(labels.cpu().numpy().tolist())
-            y_pred.extend(preds.cpu().numpy().tolist())
-            # Probability of fake class (index 0 per standard ImageFolder alphabetical sorting)
-            y_probs.extend(probs[:, config.FAKE_LABEL_IDX].cpu().numpy().tolist())
-
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    y_probs = np.array(y_probs)
-
-    # Calculate metrics with pos_label=0 (fake class)
-    accuracy = accuracy_score(y_true, y_pred)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="binary", pos_label=config.FAKE_LABEL_IDX, zero_division=0
-    )
-    cm = confusion_matrix(y_true, y_pred, labels=[config.FAKE_LABEL_IDX, config.REAL_LABEL_IDX])
-    clf_report = classification_report(y_true, y_pred, target_names=config.CLASS_NAMES, output_dict=True, zero_division=0)
-
-    # Plots
-    cm_path = Path(args.reports_dir) / "confusion_matrix.png"
-    plot_confusion_matrix(cm, config.CLASS_NAMES, cm_path)
-    logger.info(f"Saved confusion matrix plot: {cm_path}")
-
-    roc_path = Path(args.reports_dir) / "roc_curve.png"
-    roc_auc = plot_roc_curve(y_true, y_probs, roc_path)
-    logger.info(f"Saved ROC curve plot: {roc_path}")
-
-    metrics = {
-        "model_name": model_name,
-        "checkpoint": str(args.checkpoint),
-        "total_samples": len(test_dataset),
-        "accuracy": float(accuracy),
-        "precision": float(precision),
-        "recall": float(recall),
-        "f1_score": float(f1),
-        "roc_auc": float(roc_auc),
-        "confusion_matrix": cm.tolist(),
-        "detailed_report": clf_report
-    }
-
-    # Save metrics JSON
-    metrics_json_path = Path(args.reports_dir) / "evaluation_summary.json"
-    with open(metrics_json_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=4)
-    logger.info(f"Saved evaluation metrics JSON: {metrics_json_path}")
-
-    # Generate Markdown Summary Report
-    report_md_path = Path(args.reports_dir) / "evaluation_report.md"
-    with open(report_md_path, "w", encoding="utf-8") as f:
-        f.write("# DivyaDrishti AI — Deepfake Detection Evaluation Report\n\n")
-        f.write(f"- **Model**: `{model_name}`\n")
-        f.write(f"- **Evaluated Checkpoint**: `{args.checkpoint}`\n")
-        f.write(f"- **Total Test Images**: `{len(test_dataset)}`\n\n")
-        f.write("## Performance Summary\n\n")
-        f.write("| Metric | Score |\n")
-        f.write("|---|---|\n")
-        f.write(f"| **Accuracy** | {accuracy * 100:.2f}% |\n")
-        f.write(f"| **Precision (Fake)** | {precision * 100:.2f}% |\n")
-        f.write(f"| **Recall (Fake)** | {recall * 100:.2f}% |\n")
-        f.write(f"| **F1-Score** | {f1 * 100:.2f}% |\n")
-        f.write(f"| **ROC-AUC** | {roc_auc:.4f} |\n\n")
-        f.write("## Confusion Matrix\n\n")
-        f.write(f"![Confusion Matrix](confusion_matrix.png)\n\n")
-        f.write("## ROC Curve\n\n")
-        f.write(f"![ROC Curve](roc_curve.png)\n")
-    logger.info(f"Saved markdown report: {report_md_path}")
-
     print("\n" + "=" * 50)
     print("           EVALUATION RESULTS")
     print("=" * 50)

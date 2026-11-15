@@ -9,10 +9,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Run as a non-root user: the service ingests uploads and writes audit logs.
+RUN useradd --create-home --uid 10001 appuser
+
 # Install system dependencies (OpenCV, libGL, curl for healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libgomp1 \
     curl \
@@ -26,8 +29,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
-# Ensure checkpoints directory exists
-RUN mkdir -p models/checkpoints reports data
+# Ensure the writable directories exist and belong to the service user.
+RUN mkdir -p models/checkpoints reports data logs \
+    && chown -R appuser:appuser /app
+USER appuser
 
 # Expose ports for both Streamlit (8501) and FastAPI (8000)
 EXPOSE 8501 8000

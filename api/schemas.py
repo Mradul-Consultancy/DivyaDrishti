@@ -43,31 +43,12 @@ class DetectionResponse(BaseModel):
     )
 
 
-class VideoJobRequest(BaseModel):
-    """Submits a video for asynchronous analysis."""
-
-    webhook_url: Optional[str] = Field(None, description="Called with the result when analysis finishes")
-    explain: bool = Field(False, description="Include per-frame Grad-CAM overlays")
-    max_frames: int = Field(60, ge=1, le=600, description="Maximum frames sampled from the video")
-    frame_step: int = Field(4, ge=1, le=60, description="Sampling stride in frames")
-
-
 class TimelineHotspot(BaseModel):
     """A stretch of the video where the forgery signal peaks."""
 
     frame_index: int
     timestamp_seconds: float
     fake_probability: float
-
-
-class VideoJobResponse(BaseModel):
-    """Acknowledgement of a queued video job."""
-
-    job_id: str
-    status: str = Field(..., description="'queued', 'running', 'completed' or 'failed'")
-    submitted_at: str
-    result_url: Optional[str] = Field(None, description="Where to fetch the completed result")
-    webhook_url: Optional[str] = None
 
 
 class VideoResult(BaseModel):

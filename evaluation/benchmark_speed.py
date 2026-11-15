@@ -156,7 +156,7 @@ def benchmark_all_models(
     cn_path = checkpoint_dir / "convnext_tiny.fb_in22k_ft_in1k_best.pth"
     cn_model = timm.create_model("convnext_tiny.fb_in22k_ft_in1k", pretrained=False, num_classes=2)
     if cn_path.exists():
-        sd = torch.load(cn_path, map_location="cpu")
+        sd = torch.load(cn_path, map_location="cpu", weights_only=True)
         cn_model.load_state_dict(sd.get("state_dict", sd))
     models["ConvNeXt-Tiny (timm)"] = {
         "model": cn_model,
@@ -169,7 +169,7 @@ def benchmark_all_models(
     eff_path = checkpoint_dir / "efficientnet_b3.ra2_in1k_best.pth"
     eff_model = timm.create_model("efficientnet_b3.ra2_in1k", pretrained=False, num_classes=2)
     if eff_path.exists():
-        sd = torch.load(eff_path, map_location="cpu")
+        sd = torch.load(eff_path, map_location="cpu", weights_only=True)
         eff_model.load_state_dict(sd.get("state_dict", sd))
     models["EfficientNet-B3 (timm)"] = {
         "model": eff_model,

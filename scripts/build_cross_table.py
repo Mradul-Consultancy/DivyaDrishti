@@ -47,6 +47,7 @@ import torch
 import config
 from utils.helpers import setup_logger, ensure_dirs
 from evaluation.evaluate_cross_dataset import resolve_test_split
+from evaluation.calibration import load_threshold
 
 # The console summary contains box-drawing/arrow characters. On Windows the
 # default console encoding is cp1252, which cannot represent them and raises
@@ -132,6 +133,30 @@ def _yolo_checkpoint(train_ds: str) -> Tuple[Path, bool]:
 # matching evaluation/evaluate_ensemble.py and evaluation/generate_reports.py.
 
 
+def resolve_operating_points(model_names: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
+    """
+    The decision threshold that is actually shipped, per (domain, model).
+
+    The published metrics must describe the decision rule the product uses.
+    Accuracy, precision, recall, F1 and the confusion matrix all depend on
+    the threshold; ROC-AUC and Brier do not. Using a hardcoded 0.5 while the
+    service ships 0.21-0.96 would report a system nobody deploys.
+
+    Each model has its own calibrated threshold, because each has its own
+    score distribution. The ensemble has no calibration of its own, so it
+    uses the median of its members' thresholds - recorded explicitly so the
+    number is traceable.
+    """
+    names = model_names or list(TIMM_MODELS.values())
+    points: Dict[str, Dict[str, float]] = {}
+    for domain in TRAIN_DATASETS:
+        per_model = {name: load_threshold(domain, name) for name in names}
+        ensemble_threshold = sorted(per_model.values())[len(per_model) // 2]
+        per_model["ensemble"] = ensemble_threshold
+        points[domain] = per_model
+    return points
+
+
 def resolve_domain_notes() -> Dict[str, bool]:
     """
     Determines, per training domain, whether a domain-specific checkpoint
@@ -202,6 +227,7 @@ def evaluate_timm_on_dir(
     test_dir: Path,
     batch_size: int = 32,
     device: torch.device = None,
+    threshold: float = 0.5,
 ) -> Optional[Dict[str, Any]]:
     """
     Runs a single timm model on ``test_dir`` (which must contain real/ and fake/ subfolders).
@@ -232,7 +258,7 @@ def evaluate_timm_on_dir(
 
     # Load model
     model = _timm.create_model(model_name, pretrained=False, num_classes=2)
-    ckpt = torch.load(checkpoint, map_location=device)
+    ckpt = torch.load(checkpoint, map_location=device, weights_only=True)
     model.load_state_dict(ckpt["state_dict"])
     model = model.to(device)
     model.eval()
@@ -251,7 +277,8 @@ def evaluate_timm_on_dir(
             y_true.extend(labels.cpu().numpy().tolist())
             y_probs_all.extend(probs[:, config.FAKE_LABEL_IDX].cpu().numpy().tolist())
 
-    res = _compute_metrics(np.array(y_true), np.array(y_probs_all))
+    res = _compute_metrics(np.array(y_true), np.array(y_probs_all), threshold=threshold)
+    res["threshold"] = threshold
     res["n_real"] = n_real
     res["n_fake"] = n_fake
     return res
@@ -262,6 +289,7 @@ def evaluate_yolo_on_dir(
     test_dir: Path,
     batch_size: int = 32,
     device: torch.device = None,
+    threshold: float = 0.5,
 ) -> Optional[Dict[str, Any]]:
     """Runs YOLO26n-cls on ``test_dir`` and returns a metrics dict."""
     if not checkpoint.exists():
@@ -358,6 +386,7 @@ def evaluate_ensemble_on_dir(
     weights: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     batch_size: int = 32,
     device: torch.device = None,
+    threshold: float = 0.5,
 ) -> Optional[Dict[str, Any]]:
     """Soft-voting ensemble over (YOLO, ConvNeXt, EfficientNet)."""
     import timm as _timm
@@ -380,7 +409,7 @@ def evaluate_ensemble_on_dir(
         if not ckpt.exists():
             logger.warning(f"  Ensemble: missing {disp_name} checkpoint {ckpt}")
             continue
-        sd = torch.load(ckpt, map_location=device)
+        sd = torch.load(ckpt, map_location=device, weights_only=True)
         m.load_state_dict(sd["state_dict"])
         m = m.to(device)
         m.eval()
@@ -439,7 +468,8 @@ def evaluate_ensemble_on_dir(
         total_w = float(len(used))
     ensemble_probs = sum((w / total_w) * pa for w, pa in used)
 
-    res = _compute_metrics(ground_truth, ensemble_probs)
+    res = _compute_metrics(ground_truth, ensemble_probs, threshold=threshold)
+    res["threshold"] = threshold
     return res
 
 
@@ -548,7 +578,8 @@ def export_csv_table(results: Dict, target_paths: List[Path],
                         "Recall Real (%)": "",
                         "F1-Score (%)": "",
                         "ROC-AUC": "",
-                        "Brier Score": ""
+                        "Brier Score": "",
+                        "Threshold": ""
                     })
                     continue
                 # Confusion matrix layout is [FAKE, REAL] for both axes:
@@ -578,7 +609,8 @@ def export_csv_table(results: Dict, target_paths: List[Path],
                     "Recall Real (%)": _pct(rec_real),
                     "F1-Score (%)": f"{mets.get('f1_score', 0)*100:.2f}",
                     "ROC-AUC": f"{mets.get('roc_auc', 0):.4f}",
-                    "Brier Score": f"{mets.get('brier_score', 0):.4f}"
+                    "Brier Score": f"{mets.get('brier_score', 0):.4f}",
+                    "Threshold": f"{mets.get('threshold', 0.5):.4f}"
                 })
     if not rows:
         return
@@ -689,6 +721,39 @@ def _free_device_memory():
         pass
 
 
+
+def _is_cuda_oom(exc: BaseException) -> bool:
+    """True when an exception is a CUDA out-of-memory failure."""
+    name = type(exc).__name__.lower()
+    if "outofmemory" in name:
+        return True
+    msg = str(exc).lower()
+    return "out of memory" in msg or "cuda error: out of memory" in msg
+
+
+def _with_cpu_fallback(fn, *args, device, **kwargs):
+    """
+    Runs an evaluation, retrying on the CPU if the GPU runs out of memory.
+
+    A 4 GB card cannot hold every backbone at once, and a CUDA OOM poisons
+    the context for every model that follows - which previously blanked the
+    whole cross-dataset table after one failure. The CPU retry keeps the
+    table complete.
+    """
+    try:
+        return fn(*args, device=device, **kwargs)
+    except Exception as exc:
+        if not _is_cuda_oom(exc):
+            raise
+        logger.warning(
+            "  CUDA out of memory - retrying this model on the CPU. "
+            "The table stays complete; this model is simply slower."
+        )
+        _free_device_memory()
+        import torch
+        return fn(*args, device=torch.device("cpu"), **kwargs)
+
+
 # ── Main evaluation loop ────────────────────────────────────────────────────
 
 def run_cross_table(args):
@@ -705,6 +770,10 @@ def run_cross_table(args):
         "EfficientNet-B3": "efficientnet_b3.ra2_in1k",
         "ConvNeXt-Tiny":   "convnext_tiny.fb_in22k_ft_in1k",
     }
+
+    # Metrics are reported at the operating point the service ships, not at
+    # an arbitrary 0.5.
+    operating_points = resolve_operating_points(list(timm_meta.values()))
 
     for train_ds in TRAIN_DATASETS:
         results[train_ds] = {}
@@ -729,6 +798,13 @@ def run_cross_table(args):
             )
         domain_note[train_ds] = all_domain_specific
 
+        # The operating point actually shipped for each model in this domain.
+        ops = operating_points.get(train_ds, {})
+        logger.info(
+            "  Operating points (shipped thresholds): "
+            + ", ".join(f"{k}={v:.4f}" for k, v in sorted(ops.items()))
+        )
+
         for test_name, test_base_dir in TEST_DATASETS.items():
             results[train_ds][test_name] = {}
             logger.info(f"\n  → Evaluating on [{test_name}]  ({test_base_dir})")
@@ -738,8 +814,11 @@ def run_cross_table(args):
                 ckpt, _ = ckpts[disp_name]
                 logger.info(f"    {disp_name}: {ckpt}")
                 try:
-                    m = evaluate_timm_on_dir(model_name, ckpt, test_base_dir,
-                                             batch_size=args.batch_size, device=device)
+                    m = _with_cpu_fallback(
+                        evaluate_timm_on_dir, model_name, ckpt, test_base_dir,
+                        batch_size=args.batch_size,
+                        threshold=ops.get(model_name, 0.5),
+                        device=device)
                     results[train_ds][test_name][disp_name] = m
                     if m:
                         logger.info(f"      AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
@@ -752,8 +831,11 @@ def run_cross_table(args):
             # YOLO
             logger.info(f"    YOLO26n-cls: {yolo_ckpt}")
             try:
-                m = evaluate_yolo_on_dir(yolo_ckpt, test_base_dir,
-                                         batch_size=args.batch_size, device=device)
+                m = _with_cpu_fallback(
+                    evaluate_yolo_on_dir, yolo_ckpt, test_base_dir,
+                    batch_size=args.batch_size,
+                    threshold=ops.get("ensemble", 0.5),
+                    device=device)
                 results[train_ds][test_name]["YOLO26n-cls"] = m
                 if m:
                     logger.info(f"      AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
@@ -769,10 +851,11 @@ def run_cross_table(args):
             logger.info(f"    Soft-Voting Ensemble…")
             try:
                 timm_ckpts = {dn: path for dn, (path, _) in ckpts.items()}
-                m = evaluate_ensemble_on_dir(
-                    timm_ckpts, timm_meta, yolo_ckpt, test_base_dir,
-                    weights=(1.0, 1.0, 1.0), batch_size=args.batch_size, device=device
-                )
+                m = _with_cpu_fallback(
+                    evaluate_ensemble_on_dir, timm_ckpts, timm_meta, yolo_ckpt, test_base_dir,
+                    weights=(1.0, 1.0, 1.0), batch_size=args.batch_size,
+                    threshold=ops.get("ensemble", 0.5),
+                    device=device)
                 results[train_ds][test_name]["Ensemble"] = m
                 if m:
                     logger.info(f"      Ensemble AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")

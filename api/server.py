@@ -24,6 +24,7 @@ Design notes
 """
 
 import base64
+import json
 import io
 import os
 import sys
@@ -46,8 +47,6 @@ from api.schemas import (
     FaceDetail,
     HealthResponse,
     TimelineHotspot,
-    VideoJobRequest,
-    VideoJobResponse,
     VideoResult,
 )
 from evaluation.calibration import load_threshold
@@ -58,7 +57,7 @@ from models.detector import get_model
 from preprocessing.face_extractor import FaceExtractor, FaceNotFoundError
 
 try:
-    from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+    from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel
 except ImportError as exc:  # pragma: no cover
@@ -68,6 +67,19 @@ except ImportError as exc:  # pragma: no cover
     )
 
 API_VERSION = "1.0.0"
+
+# A caller-supplied threshold is clamped to this range: outside it a single
+# parameter would decide every verdict.
+MIN_THRESHOLD = 0.05
+MAX_THRESHOLD = 0.99
+
+# Maximum upload size. Larger bodies are rejected rather than buffered.
+MAX_UPLOAD_BYTES = int(os.environ.get("DF_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
+
+# Shared secret for the audit endpoints and for purging the decision log.
+# Set DF_API_KEY to require it; when unset the service runs open, which is
+# only appropriate behind an authenticating gateway.
+API_KEY = os.environ.get("DF_API_KEY") or None
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 app = FastAPI(
@@ -111,7 +123,7 @@ class LoadedModel:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = get_model(model_name=name, num_classes=config.NUM_CLASSES, pretrained=False)
         ckpt_path = config.CHECKPOINT_DIR / cfg["file"]
-        ckpt = torch.load(ckpt_path, map_location="cpu")
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
         state = ckpt.get("state_dict", ckpt.get("model_state_dict", ckpt))
         state = {k.replace("module.", ""): v for k, v in state.items()}
         self.model.load_state_dict(state)
@@ -159,6 +171,37 @@ def get_extractor() -> FaceExtractor:
 # --------------------------------------------------------------------------
 # Endpoints
 # --------------------------------------------------------------------------
+
+
+async def _read_capped(file: UploadFile) -> bytes:
+    """
+    Reads an upload, refusing anything over MAX_UPLOAD_BYTES.
+
+    Reading the whole body into memory without a cap lets one request
+    exhaust the worker's RAM.
+    """
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"upload exceeds the {MAX_UPLOAD_BYTES // (1024*1024)} MB limit",
+        )
+    return data
+
+
+def require_api_key(x_api_key: Optional[str] = Header(None)) -> None:
+    """
+    Shared-secret check for the audit endpoints.
+
+    The detection endpoints stay open (they are the product); the audit
+    endpoints expose the decision log and can purge it, so they are
+    protected whenever DF_API_KEY is configured.
+    """
+    if API_KEY is None:
+        return
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="invalid or missing API key")
+
 
 @app.get("/health", response_model=HealthResponse)
 def health():
@@ -217,7 +260,7 @@ async def detect_image(
     """
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
-    data = await file.read()
+    data = await _read_capped(file)
     digest = audit.sha256_bytes(data)
     c2pa = inspect_bytes(data)
 
@@ -229,6 +272,13 @@ async def detect_image(
     loaded = get_loaded(model)
     if threshold is not None:
         thr = float(threshold)
+        # A caller must not be able to force a verdict: threshold=0 would
+        # call every image fake, threshold=1 would call every image real.
+        if not (MIN_THRESHOLD <= thr <= MAX_THRESHOLD):
+            raise HTTPException(
+                status_code=422,
+                detail=f"threshold must be within [{MIN_THRESHOLD}, {MAX_THRESHOLD}]",
+            )
         thr_source = "request"
     else:
         thr = loaded.threshold
@@ -342,8 +392,8 @@ async def detect_video(
     model: str = Form("convnext_tiny.fb_in22k_ft_in1k"),
     threshold: Optional[float] = Form(None),
     explain: bool = Form(False),
-    max_frames: int = Form(60),
-    frame_step: int = Form(4),
+    max_frames: int = Form(60, ge=1, le=600),
+    frame_step: int = Form(4, ge=1, le=60),
 ):
     """
     Scores a video by sampling frames.
@@ -354,21 +404,36 @@ async def detect_video(
     """
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
-    data = await file.read()
+    data = await _read_capped(file)
     digest = audit.sha256_bytes(data)
     c2pa = inspect_bytes(data)
 
     loaded = get_loaded(model)
     thr = float(threshold) if threshold is not None else loaded.threshold
 
+    # OpenCV's VideoCapture only accepts a path, so the upload is spooled to a
+    # temporary file. It is deleted in the finally block, and never persisted.
+    import tempfile
+    import cv2
+
+    tmp_path = None
     try:
-        import cv2
-        cap = cv2.VideoCapture(io.BytesIO(data))
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        cap = cv2.VideoCapture(tmp_path)
     except Exception as exc:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         raise HTTPException(status_code=500, detail=f"video decoding unavailable: {exc}")
 
     extractor = get_extractor()
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 30.0
+
     scores: List[float] = []
+    # (source frame index, probability) - frames with no face are dropped, so
+    # the index cannot be recovered from the position in `scores`.
+    scored_frames: List[tuple] = []
     frame_index = 0
     try:
         while cap.isOpened() and len(scores) < max_frames:
@@ -379,11 +444,20 @@ async def detect_video(
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 faces = extractor.extract_faces(Image.fromarray(rgb))
                 if faces:
-                    fake_p, _real_p = loaded.score(faces[0].image)
-                    scores.append(fake_p)
+                    best = max(
+                        (loaded.score(d.image) for d in faces),
+                        key=lambda s: s[0],
+                    )
+                    scores.append(best[0])
+                    scored_frames.append((frame_index, best[0]))
             frame_index += 1
     finally:
         cap.release()
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
     if not scores:
         raise HTTPException(
@@ -401,9 +475,9 @@ async def detect_video(
     order = np.argsort(-arr)
     hotspots = [
         TimelineHotspot(
-            frame_index=int(i * frame_step),
-            timestamp_seconds=round(float(i * frame_step) / 30.0, 3),  # assume 30 fps
-            fake_probability=round(float(arr[i]), 6),
+            frame_index=int(scored_frames[int(i)][0]),
+            timestamp_seconds=round(scored_frames[int(i)][0] / fps, 3),
+            fake_probability=round(float(scored_frames[int(i)][1]), 6),
         )
         for i in order[:10]
     ]
@@ -433,15 +507,29 @@ async def detect_video(
 
 
 @app.get("/v1/audit/recent")
-def audit_recent(limit: int = 50):
+def audit_recent(limit: int = 50, x_api_key: Optional[str] = Header(None)):
     """Recent decision records - metadata only, never image content."""
+    require_api_key(x_api_key)
     return {"records": audit.recent(limit=limit)}
 
 
 @app.post("/v1/audit/purge")
-def audit_purge():
-    """Clears the in-memory decision buffer (the on-disk log is untouched)."""
-    return {"cleared_records": audit.wipe_in_memory()}
+def audit_purge(x_api_key: Optional[str] = Header(None)):
+    """
+    Clears the in-memory decision buffer (the on-disk log is untouched).
+
+    The purge itself is recorded, so the audit trail cannot be erased
+    without leaving a trace.
+    """
+    require_api_key(x_api_key)
+    cleared = audit.wipe_in_memory()
+    audit.record(
+        request_id="purge", model="-", domain=None, threshold=0.0,
+        threshold_source="admin", verdict="audit_purged", fake_probability=0.0,
+        face_count=0, input_sha256="-" * 64, processing_time_ms=0.0,
+        media_type="admin", notes=[f"cleared {cleared} in-memory records"],
+    )
+    return {"cleared_records": cleared}
 
 
 if __name__ == "__main__":

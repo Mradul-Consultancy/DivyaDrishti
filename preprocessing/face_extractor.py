@@ -48,6 +48,8 @@ class FaceNotFoundError(RuntimeError):
     """Raised when no face passes the confidence threshold."""
 
 
+
+
 class FaceDetection(NamedTuple):
     """A single detected face and the crop taken from it."""
 
@@ -145,9 +147,10 @@ class FaceExtractor:
         if isinstance(img_input, (str, Path)):
             return Image.open(img_input).convert("RGB")
         if isinstance(img_input, np.ndarray):
-            arr = img_input
-            # Heuristic: OpenCV arrays are BGR, PIL-backed arrays are RGB.
-            return Image.fromarray(arr)
+            # Treated as RGB, which is what PIL/numpy arrays normally carry.
+            # Callers holding OpenCV BGR data must convert it first - every
+            # current caller does.
+            return Image.fromarray(img_input)
         if isinstance(img_input, Image.Image):
             return img_input.convert("RGB")
         raise ValueError(f"Unsupported image input type: {type(img_input)}")
@@ -184,6 +187,10 @@ class FaceExtractor:
         for box, prob in zip(boxes, probs):
             if prob is None or prob < self.min_confidence:
                 continue
+            # MTCNN returns corner pairs (x1, y1, x2, y2) - see
+            # vendor/facenet_pytorch/models/utils/detect_face.py, which builds
+            # boundingbox = cat([q1, q2, score, reg]) with q1 top-left and
+            # q2 bottom-right. The training extractor unpacks it the same way.
             out.append(self._crop(pil_img, box, float(prob)))
         return out
 
@@ -199,17 +206,24 @@ class FaceExtractor:
             )
         except Exception:
             return []
-        return [self._crop(pil_img, box, 1.0) for box in faces]
+        # Haar returns (x, y, w, h); convert to corners explicitly so the
+        # crop is the same size as the training extractor's crop.
+        corners = [(int(x), int(y), int(x + w), int(y + h))
+                   for (x, y, w, h) in faces]
+        return [self._crop(pil_img, box, 1.0) for box in corners]
 
     def _crop(self, pil_img: Image.Image, box, confidence: float) -> FaceDetection:
-        x, y, w, h = [int(v) for v in box]
+        """Crops the face from ``box``, which is always (x1, y1, x2, y2)."""
+        x1, y1, x2, y2 = [int(v) for v in box]
+        w = max(0, x2 - x1)
+        h = max(0, y2 - y1)
         margin_x = int(w * self.margin_ratio)
         margin_y = int(h * self.margin_ratio)
         img_w, img_h = pil_img.size
-        x1 = max(0, x - margin_x)
-        y1 = max(0, y - margin_y)
-        x2 = min(img_w, x + w + margin_x)
-        y2 = min(img_h, y + h + margin_y)
+        x1 = max(0, x1 - margin_x)
+        y1 = max(0, y1 - margin_y)
+        x2 = min(img_w, x2 + margin_x)
+        y2 = min(img_h, y2 + margin_y)
         crop = pil_img.crop((x1, y1, x2, y2))
         return FaceDetection(image=crop, box=(x1, y1, x2, y2), confidence=confidence)
 
