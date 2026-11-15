@@ -91,8 +91,60 @@ class PredictionReportGenerator:
         self.logger = logger or setup_logger("ReportGenerator")
         ensure_dirs(self.output_dir)
 
+        # ---- schema normalisation ---------------------------------------
+        # Two producers write prediction CSVs with different schemas:
+        #   evaluation/evaluate_ensemble.py -> reports/saved_predictions.csv
+        #       (yolo_prob_fake, convnext_prob_fake, effnet_prob_fake,
+        #        ensemble_prob_fake, ground_truth, ...)
+        #   evaluation/evaluate.py          -> reports/saved_predictions_single.csv
+        #       (image_path, video_id, true_label, predicted_label,
+        #        prob_fake, prob_real)
+        # Both are accepted; anything else is rejected with guidance instead
+        # of a KeyError deep inside the metric code.
         if "ground_truth" not in self.df.columns:
-            raise KeyError("Predictions dataframe must contain a 'ground_truth' column (0 for fake, 1 for real).")
+            if "true_label" in self.df.columns:
+                label_map = {str(k).lower(): v for k, v in config.CLASS_TO_IDX.items()}
+                mapped = self.df["true_label"].astype(str).str.lower().map(label_map)
+                if mapped.isna().any():
+                    unknown = sorted(set(
+                        self.df.loc[mapped.isna(), "true_label"].astype(str)
+                    ))
+                    raise ValueError(
+                        "Predictions CSV contains unknown true_label value(s) "
+                        f"{unknown}; expected one of {sorted(label_map)}"
+                    )
+                self.df = self.df.assign(ground_truth=mapped.astype(int))
+            else:
+                raise KeyError(
+                    "Predictions dataframe must contain a 'ground_truth' column "
+                    "(ensemble schema) or a 'true_label' column (single-model "
+                    "schema)."
+                )
+
+        present = [cfg for cfg in self.MODEL_CONFIGS if cfg["prob_col"] in self.df.columns]
+        if present:
+            self.model_configs = present
+        elif "prob_fake" in self.df.columns:
+            # Single-model schema: one probability column, one row per frame.
+            self.model_configs = [{
+                "key": "model",
+                "name": "Model (single)",
+                "prob_col": "prob_fake",
+                "pred_col": "predicted_label",
+                "color": "#d62728",
+                "linestyle": "-",
+            }]
+        else:
+            raise ValueError(
+                "No model probability columns found in the predictions CSV. "
+                "Expected either the ensemble schema written by "
+                "evaluation/evaluate_ensemble.py to reports/saved_predictions.csv "
+                "(columns: yolo_prob_fake, convnext_prob_fake, effnet_prob_fake, "
+                "ensemble_prob_fake) or the single-model schema written by "
+                "evaluation/evaluate.py to reports/saved_predictions_single.csv "
+                "(columns: image_path, video_id, true_label, predicted_label, "
+                "prob_fake, prob_real)."
+            )
 
         self.y_true = self.df["ground_truth"].values.astype(int)
 
@@ -110,7 +162,7 @@ class PredictionReportGenerator:
         """
         results = {}
 
-        for cfg in self.MODEL_CONFIGS:
+        for cfg in self.model_configs:
             prob_col = cfg["prob_col"]
             if prob_col not in self.df.columns:
                 continue
@@ -227,12 +279,15 @@ class PredictionReportGenerator:
         plt.close()
 
     def plot_confusion_matrices(self, metrics: Dict[str, Dict], save_path: Path):
-        """Plots 2x2 grid of confusion matrices."""
+        """Plots the confusion matrices in a grid sized to the model count."""
         keys = list(metrics.keys())
-        fig, axes = plt.subplots(2, 2, figsize=(11, 10))
-        axes = axes.flatten()
+        n = max(len(keys), 1)
+        ncols = 2 if n > 1 else 1
+        nrows = (n + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 5 * nrows))
+        axes = np.atleast_1d(axes).flatten()
 
-        for idx, k in enumerate(keys[:4]):
+        for idx, k in enumerate(keys):
             ax = axes[idx]
             m = metrics[k]
             cm = np.array(m["confusion_matrix"])
@@ -260,6 +315,9 @@ class PredictionReportGenerator:
                 f"{m['name']}\nAcc: {m['accuracy']*100:.1f}% | F1: {m['f1_score']*100:.1f}%",
                 fontweight="bold", pad=12
             )
+
+        for ax in axes[len(keys):]:
+            ax.axis("off")
 
         plt.suptitle("Confusion Matrix Grid (Test Predictions)", fontweight="bold", fontsize=14, y=0.99)
         plt.tight_layout()
@@ -297,7 +355,7 @@ class PredictionReportGenerator:
             video_df = aggregate_predictions_by_video(self.df, method="mean")
             self.logger.info(f"Aggregated {len(self.df)} frame predictions into {len(video_df)} video predictions.")
             
-            for cfg in self.MODEL_CONFIGS:
+            for cfg in self.model_configs:
                 prob_col = cfg["prob_col"]
                 if prob_col in video_df.columns:
                     ci = bootstrap_confidence_intervals(

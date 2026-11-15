@@ -26,12 +26,14 @@ Design notes
 import base64
 import json
 import io
+import logging
 import os
 import sys
 import time
 import uuid
 from pathlib import Path
 from typing import List, Optional
+from contextlib import asynccontextmanager
 
 import numpy as np
 import torch
@@ -82,9 +84,27 @@ MAX_UPLOAD_BYTES = int(os.environ.get("DF_MAX_UPLOAD_BYTES", str(20 * 1024 * 102
 API_KEY = os.environ.get("DF_API_KEY") or None
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
+
+def _warn_if_open() -> None:
+    """Loud, once-per-boot notice when the service has no API key configured."""
+    if API_KEY is None:
+        logging.getLogger(__name__).warning(
+            "DF_API_KEY is NOT set: every /v1 endpoint is open to anyone with "
+            "network access. Deploy behind an authenticating gateway "
+            "(see deploy/nginx-divyadrishhti.conf) or set DF_API_KEY."
+        )
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    _warn_if_open()
+    yield
+
+
 app = FastAPI(
     title="Deepfake Detection API",
     version=API_VERSION,
+    lifespan=lifespan,
     description=(
         "Deepfake image and video detection with calibrated operating points, "
         "Grad-CAM explainability and C2PA provenance inspection."
@@ -191,11 +211,15 @@ async def _read_capped(file: UploadFile) -> bytes:
 
 def require_api_key(x_api_key: Optional[str] = Header(None)) -> None:
     """
-    Shared-secret check for the audit endpoints.
+    Shared-secret check for every /v1 endpoint.
 
-    The detection endpoints stay open (they are the product); the audit
-    endpoints expose the decision log and can purge it, so they are
-    protected whenever DF_API_KEY is configured.
+    When DF_API_KEY is unset the service runs open, which is only appropriate
+    behind an authenticating gateway (the deployment configs under deploy/
+    show one). As soon as DF_API_KEY is configured, EVERY /v1 endpoint -
+    detection included - demands the key; only /health stays open so that
+    load balancers can still run liveness probes. The audit endpoints are
+    additionally dangerous (they expose and can purge the decision log), so
+    they must never be deployed without the key or a gateway.
     """
     if API_KEY is None:
         return
@@ -222,7 +246,8 @@ def health():
 
 
 @app.get("/v1/models")
-def list_models():
+def list_models(x_api_key: Optional[str] = Header(None)):
+    require_api_key(x_api_key)
     """Lists the checkpoints, their calibration and the measured trade-off."""
     out = []
     for name, cfg in MODELS.items():
@@ -250,6 +275,7 @@ async def detect_image(
     threshold: Optional[float] = Form(None),
     explain: bool = Form(False),
     use_spectral: bool = Form(False),
+    x_api_key: Optional[str] = Header(None),
 ):
     """
     Scores an image.
@@ -258,6 +284,7 @@ async def detect_image(
     one. A frame with no acceptable face returns 422 rather than a verdict,
     because the detectors are trained on face crops only.
     """
+    require_api_key(x_api_key)
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
     data = await _read_capped(file)
@@ -408,6 +435,7 @@ async def detect_video(
     explain: bool = Form(False),
     max_frames: int = Form(60, ge=1, le=600),
     frame_step: int = Form(4, ge=1, le=60),
+    x_api_key: Optional[str] = Header(None),
 ):
     """
     Scores a video by sampling frames.
@@ -416,6 +444,7 @@ async def detect_video(
     that flicker between frames produce unstable per-frame scores, and that
     instability is itself a forgery cue that a single-frame detector misses.
     """
+    require_api_key(x_api_key)
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
     data = await _read_capped(file)

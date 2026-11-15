@@ -244,16 +244,35 @@ uvicorn api.server:app --host 0.0.0.0 --port 8000
 # or: python api/server.py
 ```
 
+**Security model.** The service is unauthenticated by default and is meant to
+run behind an authenticating gateway — `deploy/nginx-divyadrishhti.conf` is a
+ready-made reference front door (TLS, upload ceiling, gateway-level key
+check). As soon as `DF_API_KEY` is set, **every** `/v1` endpoint — detection
+included — requires that shared secret in the `X-API-Key` header; only
+`GET /health` stays open for liveness probes. Booting without `DF_API_KEY`
+logs a loud warning. Audit endpoints additionally expose (and can purge) the
+decision log; never deploy them without the key or a gateway.
+
+**Upload & retention policy.** Uploads are capped by `DF_MAX_UPLOAD_BYTES`
+(20 MB default) and processed in memory. The video endpoint spools to a temp
+file that is deleted in the same request; the Streamlit UI spools into a
+dedicated `divyadrishhti_video` temp folder that is emptied on interpreter
+exit, with a 6-hour stale sweep recovering files orphaned by a crashed
+process. Nothing is persisted beyond the request/session.
+
 | Endpoint | Purpose |
 |---|---|
-| `GET /health` | Service status, available checkpoints, calibrated domains |
+| `GET /health` | Service status, available checkpoints, calibrated domains (no auth) |
 | `GET /v1/models` | Checkpoints with their measured calibration and operating point |
 | `POST /v1/detect/image` | Single-image detection (multipart upload) |
 | `POST /v1/detect/video` | Video analysis with timeline hotspots and a temporal-consistency score |
 | `GET /v1/audit/recent` | Recent decision records - metadata only, never image content |
 | `POST /v1/audit/purge` | Clears the in-memory decision buffer |
 
-Response envelope for `/v1/detect/image`:
+Response envelope for `/v1/detect/image` (field names are real; the numbers
+below are **illustrative placeholders**, not measured outputs — hit
+`/v1/detect/image` yourself or read `reports/cross_dataset_table.csv` for the
+measured operating points):
 
 ```json
 {

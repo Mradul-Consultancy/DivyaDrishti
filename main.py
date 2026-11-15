@@ -241,7 +241,10 @@ Examples:
 
     # Command: generate-reports
     p_rep = subparsers.add_parser("generate-reports", help="Generate results table and ROC plots from saved predictions")
-    p_rep.add_argument("--predictions-file", type=str, default=str(config.REPORTS_DIR / "saved_predictions.csv"))
+    p_rep.add_argument("--predictions-file", type=str, default=str(config.REPORTS_DIR / "saved_predictions.csv"),
+                       help="Prediction CSV: either the ensemble schema (reports/saved_predictions.csv, "
+                            "written by evaluation/evaluate_ensemble.py) or the single-model schema "
+                            "(reports/saved_predictions_single.csv, written by main.py evaluate)")
     p_rep.add_argument("--output-dir", type=str, default=str(config.REPORTS_DIR))
     p_rep.add_argument("--threshold", type=float, default=0.5)
     p_rep.add_argument("--min-videos-per-class", type=int, default=10, help="Minimum video clusters per class required")

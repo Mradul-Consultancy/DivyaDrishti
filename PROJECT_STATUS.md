@@ -107,12 +107,15 @@ regression tests in `tests/test_metric_orientation.py`.
    - Kaggle dataset `mradulmanimishra/deepfake-code` updated to version 2.
    - Kernel `mradulmanimishra/deepfake-pilot-gpu` version 2 pushed and queued for T4 GPU execution.
 8. **Real Model Benchmarking Artifacts**:
-   - Parameter counts, latency, and throughput benchmarked across all backbones:
-     - YOLO26n-cls: 1.53M params, 164 FPS (CPU)
-     - EfficientNet-B3: 10.70M params, 17.7 FPS (CPU)
-     - ConvNeXt-Tiny: 27.82M params, 13.9 FPS (CPU)
-     - Soft-Voting Ensemble: 40.05M params, 14.0 FPS (CPU)
-   - Results saved to `reports/model_benchmark_table.md` and `reports/inference_speed_comparison.png`.
+   - Parameter counts, latency, and throughput benchmarked across all backbones
+     (source of truth: `reports/speed_table.csv` and
+     `reports/model_benchmark_table.md`, CPU, batch=1 latency / batch=32 throughput):
+     - YOLO26n-cls: 1.53M params, 138.0 FPS (CPU)
+     - EfficientNet-B3: 10.70M params, 15.7 FPS (CPU)
+     - ConvNeXt-Tiny: 27.82M params, 17.0 FPS (CPU)
+     - Soft-Voting Ensemble: 40.05M params, 14.5 FPS (CPU)
+   - Results saved to `reports/model_benchmark_table.md`, `reports/speed_table.csv`
+     and `reports/inference_speed_comparison.png`.
 
 ---
 

@@ -105,21 +105,22 @@ def get_face_extractor():
 
 # Temporary files created during this session (uploaded videos). Streamlit
 # re-runs the script on every interaction, so the paths are tracked at module
-# level and the files are removed on interpreter exit.
-_TEMP_VIDEOS: list = []
+# level and the files are removed on interpreter exit. Uploads are spooled
+# into a dedicated subdirectory of the system temp folder (never persisted
+# anywhere else); if the process dies before the atexit hook runs, a stale
+# sweep on the next start removes anything older than the TTL below. No
+# upload outlives the session except by that crash window.
+# Retention policy lives in utils/temp_uploads.py.
+from utils.temp_uploads import (
+    cleanup_session_files,
+    ensure_temp_dir,
+    register_exit_cleanup,
+    register_session_file,
+    sweep_stale_files,
+)
 
-
-def _cleanup_temp_videos():
-    for path in list(_TEMP_VIDEOS):
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-    _TEMP_VIDEOS.clear()
-
-
-import atexit
-atexit.register(_cleanup_temp_videos)
+register_exit_cleanup()
+sweep_stale_files()
 
 
 def main():
@@ -315,15 +316,18 @@ def main():
         if uploaded_video:
             # The uploaded video is biometric content, so it is written to a
             # temporary file that is deleted as soon as the page is done with
-            # it. A NamedTemporaryFile(delete=False) would leave it behind in
-            # %TEMP% indefinitely.
-            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            # it. It lives in the dedicated divyadrishhti_video temp folder;
+            # if this process dies before the exit hook runs, the startup
+            # sweep removes it once it is older than the TTL (see module head).
+            tfile = tempfile.NamedTemporaryFile(
+                delete=False, suffix=".mp4", dir=ensure_temp_dir()
+            )
             try:
                 tfile.write(uploaded_video.read())
             finally:
                 tfile.close()
             video_path = tfile.name
-            _TEMP_VIDEOS.append(video_path)
+            register_session_file(video_path)
 
             col_v1, col_v2 = st.columns([1, 1])
             with col_v1:

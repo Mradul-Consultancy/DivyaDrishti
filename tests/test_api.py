@@ -163,3 +163,48 @@ class TestC2PA:
         jpeg = b"\xff\xd8" + app0 + seg + b"\xff\xd9"
         info = inspect_bytes(jpeg)
         assert info.present is False
+
+
+class TestApiKeyGate:
+    """
+    DF_API_KEY, when configured, protects EVERY /v1 endpoint - detection
+    included - not just the audit log. /health stays open for liveness probes.
+    """
+
+    def test_every_v1_endpoint_requires_the_key_when_set(self, client, monkeypatch):
+        from api import server as srv
+        monkeypatch.setattr(srv, "API_KEY", "secret")
+        assert client.get("/v1/models").status_code == 401
+        assert client.post(
+            "/v1/detect/image",
+            files={"file": ("x.png", _png_bytes(), "image/png")},
+        ).status_code == 401
+        assert client.post("/v1/audit/purge").status_code == 401
+        # ... and the key unlocks them again.
+        assert client.get("/v1/models", headers={"X-API-Key": "secret"}).status_code == 200
+
+    def test_health_stays_open_for_liveness_probes(self, client, monkeypatch):
+        from api import server as srv
+        monkeypatch.setattr(srv, "API_KEY", "secret")
+        assert client.get("/health").status_code == 200
+
+    def test_service_runs_open_without_a_key(self, client, monkeypatch):
+        from api import server as srv
+        monkeypatch.setattr(srv, "API_KEY", None)
+        assert client.get("/v1/models").status_code == 200
+
+    def test_open_mode_logs_a_startup_warning(self, client, monkeypatch, caplog):
+        import logging
+        from api import server as srv
+        monkeypatch.setattr(srv, "API_KEY", None)
+        with caplog.at_level(logging.WARNING, logger="api.server"):
+            srv._warn_if_open()
+        assert any("DF_API_KEY" in rec.message for rec in caplog.records)
+
+    def test_keyed_mode_does_not_warn(self, client, monkeypatch, caplog):
+        import logging
+        from api import server as srv
+        monkeypatch.setattr(srv, "API_KEY", "secret")
+        with caplog.at_level(logging.WARNING, logger="api.server"):
+            srv._warn_if_open()
+        assert not any("DF_API_KEY" in rec.message for rec in caplog.records)
