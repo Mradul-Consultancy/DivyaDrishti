@@ -1,5 +1,5 @@
 # DivyaDrishti (दिव्यदृष्टि) AI — Deepfake Detection Client Deliverable
-*Auto-generated from result artefacts on 2026-11-14. No hand-written numbers.*
+*Auto-generated from result artefacts on 2026-11-15. No hand-written numbers.*
 
 > **Important**: This document is generated automatically from JSON/CSV files produced by
 > the evaluation pipeline. Do not edit it manually — re-run `python scripts/regenerate_report.py`
@@ -24,32 +24,32 @@
 
 ## 2. Cross-Dataset Performance Table
 
-| Trained on | Test dataset | Model | Checkpoint | Accuracy (%) | Balanced Accuracy (%) | Recall Fake (%) | Recall Real (%) | F1-Score (%) | ROC-AUC | Brier Score |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CELEBDF | CelebDF | EfficientNet-B3 | domain-specific | 81.34 | 68.39 | 84.08 | 52.71 | 89.16 | 0.7684 | 0.1449 |
-| CELEBDF | CelebDF | ConvNeXt-Tiny | domain-specific | 94.45 | 71.53 | 99.30 | 43.76 | 97.03 | 0.9196 | 0.0539 |
-| CELEBDF | CelebDF | YOLO26n-cls | domain-specific | 95.17 | 79.06 | 98.58 | 59.53 | 97.39 | 0.9403 | 0.0399 |
-| CELEBDF | CelebDF | Ensemble | domain-specific | 94.68 | 75.91 | 98.65 | 53.18 | 97.13 | 0.9140 | 0.0563 |
-| CELEBDF | DFDC | EfficientNet-B3 | domain-specific | 40.00 | 40.00 | 20.00 | 60.00 | 25.00 | 0.3822 | 0.4486 |
-| CELEBDF | DFDC | ConvNeXt-Tiny | domain-specific | 56.67 | 56.67 | 56.67 | 56.67 | 56.67 | 0.5933 | 0.2509 |
-| CELEBDF | DFDC | YOLO26n-cls | domain-specific | 58.33 | 58.33 | 100.00 | 16.67 | 70.59 | 0.6489 | 0.2955 |
-| CELEBDF | DFDC | Ensemble | domain-specific | 55.00 | 55.00 | 60.00 | 50.00 | 57.14 | 0.5444 | 0.2725 |
-| CELEBDF | Real-Life | EfficientNet-B3 | domain-specific | 52.33 | 52.33 | 22.50 | 82.17 | 32.07 | 0.6262 | 0.3886 |
-| CELEBDF | Real-Life | ConvNeXt-Tiny | domain-specific | 53.00 | 53.00 | 15.17 | 90.83 | 24.40 | 0.6533 | 0.3527 |
-| CELEBDF | Real-Life | YOLO26n-cls | domain-specific | 51.50 | 51.50 | 13.17 | 89.83 | 21.35 | 0.5113 | 0.4065 |
-| CELEBDF | Real-Life | Ensemble | domain-specific | 52.17 | 52.17 | 13.33 | 91.00 | 21.80 | 0.5971 | 0.3624 |
-| DFDC | CelebDF | EfficientNet-B3 | domain-specific | 84.44 | 54.77 | 90.72 | 18.82 | 91.41 | 0.6064 | 0.1213 |
-| DFDC | CelebDF | ConvNeXt-Tiny | domain-specific | 91.39 | 53.37 | 99.44 | 7.29 | 95.47 | 0.7710 | 0.0737 |
-| DFDC | CelebDF | YOLO26n-cls | domain-specific | 91.28 | 52.35 | 99.53 | 5.18 | 95.42 | 0.6697 | 0.0785 |
-| DFDC | CelebDF | Ensemble | domain-specific | 91.59 | 52.20 | 99.93 | 4.47 | 95.59 | 0.7217 | 0.0750 |
-| DFDC | DFDC | EfficientNet-B3 | domain-specific | 50.00 | 50.00 | 63.33 | 36.67 | 55.88 | 0.6044 | 0.3234 |
-| DFDC | DFDC | ConvNeXt-Tiny | domain-specific | 75.00 | 75.00 | 66.67 | 83.33 | 72.73 | 0.8233 | 0.1597 |
-| DFDC | DFDC | YOLO26n-cls | domain-specific | 73.33 | 73.33 | 96.67 | 50.00 | 78.38 | 0.8678 | 0.1684 |
-| DFDC | DFDC | Ensemble | domain-specific | 65.00 | 65.00 | 80.00 | 50.00 | 69.57 | 0.8211 | 0.1829 |
-| DFDC | Real-Life | EfficientNet-B3 | domain-specific | 51.33 | 51.33 | 85.17 | 17.50 | 63.64 | 0.4497 | 0.4108 |
-| DFDC | Real-Life | ConvNeXt-Tiny | domain-specific | 40.58 | 40.58 | 56.17 | 25.00 | 48.59 | 0.3929 | 0.4354 |
-| DFDC | Real-Life | YOLO26n-cls | domain-specific | 47.58 | 47.58 | 90.83 | 4.33 | 63.41 | 0.3626 | 0.4541 |
-| DFDC | Real-Life | Ensemble | domain-specific | 48.33 | 48.33 | 89.17 | 7.50 | 63.31 | 0.4014 | 0.3872 |
+| Trained on | Test dataset | Model | Checkpoint | Accuracy (%) | Balanced Accuracy (%) | Recall Fake (%) | Recall Real (%) | F1-Score (%) | ROC-AUC | Brier Score | Threshold |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CELEBDF | CelebDF | EfficientNet-B3 | domain-specific | 63.68 | 70.21 | 62.30 | 78.12 | 75.79 | 0.7682 | 0.1448 | 0.9323 |
+| CELEBDF | CelebDF | ConvNeXt-Tiny | domain-specific | 85.86 | 85.12 | 86.01 | 84.24 | 91.74 | 0.9196 | 0.0539 | 0.8183 |
+| CELEBDF | CelebDF | YOLO26n-cls | domain-specific | 82.88 | 85.19 | 82.39 | 88.00 | 89.78 | 0.9403 | 0.0399 | 0.9144 |
+| CELEBDF | CelebDF | Ensemble | domain-specific | 74.57 | 82.24 | 72.95 | 91.53 | 83.97 | 0.9139 | 0.0562 | 0.8527 |
+| CELEBDF | DFDC | EfficientNet-B3 | domain-specific | 46.67 | 46.67 | 6.67 | 86.67 | 11.11 | 0.3811 | 0.4488 | 0.9323 |
+| CELEBDF | DFDC | ConvNeXt-Tiny | domain-specific | 50.00 | 50.00 | 0.00 | 100.00 | 0.00 | 0.5933 | 0.2510 | 0.8183 |
+| CELEBDF | DFDC | YOLO26n-cls | domain-specific | 50.00 | 50.00 | 33.33 | 66.67 | 40.00 | 0.6489 | 0.2961 | 0.9144 |
+| CELEBDF | DFDC | Ensemble | domain-specific | 46.67 | 46.67 | 0.00 | 93.33 | 0.00 | 0.5467 | 0.2726 | 0.8527 |
+| CELEBDF | Real-Life | EfficientNet-B3 | domain-specific | 50.92 | 50.92 | 7.33 | 94.50 | 13.00 | 0.6260 | 0.3885 | 0.9323 |
+| CELEBDF | Real-Life | ConvNeXt-Tiny | domain-specific | 53.25 | 53.25 | 6.50 | 100.00 | 12.21 | 0.6533 | 0.3527 | 0.8183 |
+| CELEBDF | Real-Life | YOLO26n-cls | domain-specific | 52.08 | 52.08 | 6.83 | 97.33 | 12.48 | 0.5114 | 0.4063 | 0.9144 |
+| CELEBDF | Real-Life | Ensemble | domain-specific | 53.08 | 53.08 | 6.50 | 99.67 | 12.17 | 0.5968 | 0.3623 | 0.8527 |
+| DFDC | CelebDF | EfficientNet-B3 | domain-specific | 88.90 | 53.28 | 96.44 | 10.12 | 94.07 | 0.6064 | 0.1212 | 0.2107 |
+| DFDC | CelebDF | ConvNeXt-Tiny | domain-specific | 91.41 | 53.80 | 99.37 | 8.24 | 95.48 | 0.7710 | 0.0737 | 0.5245 |
+| DFDC | CelebDF | YOLO26n-cls | domain-specific | 91.18 | 52.83 | 99.30 | 6.35 | 95.36 | 0.6697 | 0.0786 | 0.5406 |
+| DFDC | CelebDF | Ensemble | domain-specific | 91.55 | 52.18 | 99.89 | 4.47 | 95.57 | 0.7217 | 0.0750 | 0.5244 |
+| DFDC | DFDC | EfficientNet-B3 | domain-specific | 56.67 | 56.67 | 83.33 | 30.00 | 65.79 | 0.6044 | 0.3237 | 0.2107 |
+| DFDC | DFDC | ConvNeXt-Tiny | domain-specific | 76.67 | 76.67 | 63.33 | 90.00 | 73.08 | 0.8233 | 0.1597 | 0.5245 |
+| DFDC | DFDC | YOLO26n-cls | domain-specific | 73.33 | 73.33 | 90.00 | 56.67 | 77.14 | 0.8667 | 0.1686 | 0.5406 |
+| DFDC | DFDC | Ensemble | domain-specific | 66.67 | 66.67 | 80.00 | 53.33 | 70.59 | 0.8211 | 0.1830 | 0.5244 |
+| DFDC | Real-Life | EfficientNet-B3 | domain-specific | 52.83 | 52.83 | 95.33 | 10.33 | 66.90 | 0.4496 | 0.4109 | 0.2107 |
+| DFDC | Real-Life | ConvNeXt-Tiny | domain-specific | 40.67 | 40.67 | 54.00 | 27.33 | 47.65 | 0.3929 | 0.4354 | 0.5245 |
+| DFDC | Real-Life | YOLO26n-cls | domain-specific | 47.25 | 47.25 | 89.33 | 5.17 | 62.87 | 0.3626 | 0.4542 | 0.5406 |
+| DFDC | Real-Life | Ensemble | domain-specific | 47.50 | 47.50 | 86.67 | 8.33 | 62.28 | 0.4014 | 0.3872 | 0.5244 |
 
 > **Note on cross-dataset generalisation**: ROC-AUC in this report is computed with **FAKE as the
 > positive class**, so a value of 0.5 is chance and higher is better. In published deepfake
@@ -96,11 +96,15 @@
 
 | Domain | Model | Threshold | FPR at 0.5 | FPR at threshold | Fake recall at 0.5 | Fake recall at threshold | Real recall at threshold |
 |---|---|---:|---:|---:|---:|---:|---:|
-| celebdf | efficientnet_b3.ra2_in1k | 0.9323 | 51.6% | 24.5% | 87.4% | 65.8% | 75.5% |
 | celebdf | convnext_tiny.fb_in22k_ft_in1k | 0.8183 | 75.5% | 28.4% | 99.6% | 87.1% | 71.6% |
+| celebdf | efficientnet_b3.ra2_in1k | 0.9323 | 51.6% | 24.5% | 87.4% | 65.8% | 75.5% |
+| celebdf | ensemble (soft voting, mean of members) | 0.8527 | 63.9% | 19.7% | 99.3% | 76.3% | 80.3% |
 | celebdf | resnet18 | 0.9576 | 46.8% | 10.0% | 99.1% | 86.2% | 90.0% |
-| dfdc | efficientnet_b3.ra2_in1k | 0.2107 | 35.0% | 41.0% | 75.9% | 87.3% | 59.0% |
+| celebdf | yolo26n-cls | 0.9144 | 66.1% | 26.1% | 99.0% | 81.4% | 73.9% |
 | dfdc | convnext_tiny.fb_in22k_ft_in1k | 0.5245 | 7.0% | 4.0% | 91.4% | 90.5% | 96.0% |
+| dfdc | efficientnet_b3.ra2_in1k | 0.2107 | 35.0% | 41.0% | 75.9% | 87.3% | 59.0% |
+| dfdc | ensemble (soft voting, mean of members) | 0.5244 | 13.0% | 11.0% | 91.8% | 91.8% | 89.0% |
+| dfdc | yolo26n-cls | 0.5406 | 21.0% | 15.0% | 87.3% | 83.6% | 85.0% |
 
 FPR is the share of **authentic** faces wrongly classified as fake. It is measured on each domain's validation split; the test split is never used for threshold selection. The threshold column is the shipped operating point (the balanced Youden point).
 

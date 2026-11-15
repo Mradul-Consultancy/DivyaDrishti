@@ -23,7 +23,7 @@ sys.path.append(str(ROOT))
 import torch  # noqa: E402
 
 import config  # noqa: E402
-from evaluation.calibration import calibrate_ensemble  # noqa: E402
+from evaluation.calibration import calibrate_ensemble, calibrate_yolo  # noqa: E402
 
 TIMM_MODELS = {
     "efficientnet_b3.ra2_in1k": "efficientnet_b3.ra2_in1k",
@@ -57,6 +57,14 @@ def main() -> None:
             print(f"  [skip] missing YOLO checkpoint {yolo_ckpt}")
             continue
 
+        yolo_report = calibrate_yolo(
+            yolo_ckpt, val_dir, domain,
+            device="0" if device.type == "cuda" else "cpu", batch_size=16,
+        )
+        at = yolo_report["at_chosen_threshold"]
+        print(f"  YOLO chosen threshold : {yolo_report['chosen_threshold']}")
+        print(f"  YOLO fake/real recall : {at['fake_recall']:.4f} / {at['real_recall']:.4f}")
+
         report = calibrate_ensemble(
             checkpoints, yolo_ckpt, val_dir, domain,
             device=device, batch_size=16,
@@ -69,5 +77,38 @@ def main() -> None:
         print(f"  written to       : {report['written_to']}")
 
 
+
+
+def rebuild_summary() -> None:
+    """
+    Rebuilds reports/calibration_summary.json from the threshold artefacts.
+
+    The client deliverable's Operating Points section is generated from this
+    summary, so it must cover every calibrated model: the per-model
+    thresholds plus YOLO and the ensemble.
+    """
+    import json
+
+    rows = []
+    for domain in ("celebdf", "dfdc"):
+        d = config.CHECKPOINT_DIR / domain
+        for path in sorted(d.glob("threshold_*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            rows.append({
+                "domain": domain,
+                "model": data.get("model_name", path.stem),
+                "threshold": data["chosen_threshold"],
+                "fpr_at_default_0.5": data["at_default_0.5"]["false_positive_rate"],
+                "fpr_at_chosen": data["at_chosen_threshold"]["false_positive_rate"],
+                "fake_recall_at_default_0.5": data["at_default_0.5"]["fake_recall"],
+                "fake_recall_at_chosen": data["at_chosen_threshold"]["fake_recall"],
+                "real_recall_at_chosen": data["at_chosen_threshold"]["real_recall"],
+            })
+    out = ROOT / "reports" / "calibration_summary.json"
+    out.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    print(f"\ncalibration_summary.json rebuilt with {len(rows)} entries -> {out}")
+
+
 if __name__ == "__main__":
     main()
+    rebuild_summary()

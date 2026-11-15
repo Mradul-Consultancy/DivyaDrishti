@@ -1,27 +1,33 @@
 [
   {
     "domain": "celebdf",
-    "model": "efficientnet_b3.ra2_in1k",
-    "threshold": 0.932265,
-    "fpr_at_default_0.5": 0.515789,
-    "fpr_at_chosen": 0.244737,
-    "fake_recall_at_default_0.5": 0.873918,
-    "fake_recall_at_chosen": 0.657778,
-    "real_recall_at_chosen": 0.755263,
-    "fpr_constrained_threshold": 0.999176,
-    "target_fpr_achievable": false
-  },
-  {
-    "domain": "celebdf",
     "model": "convnext_tiny.fb_in22k_ft_in1k",
     "threshold": 0.818301,
     "fpr_at_default_0.5": 0.755263,
     "fpr_at_chosen": 0.284211,
     "fake_recall_at_default_0.5": 0.996257,
     "fake_recall_at_chosen": 0.870643,
-    "real_recall_at_chosen": 0.715789,
-    "fpr_constrained_threshold": 0.903324,
-    "target_fpr_achievable": false
+    "real_recall_at_chosen": 0.715789
+  },
+  {
+    "domain": "celebdf",
+    "model": "efficientnet_b3.ra2_in1k",
+    "threshold": 0.932265,
+    "fpr_at_default_0.5": 0.515789,
+    "fpr_at_chosen": 0.244737,
+    "fake_recall_at_default_0.5": 0.873918,
+    "fake_recall_at_chosen": 0.657778,
+    "real_recall_at_chosen": 0.755263
+  },
+  {
+    "domain": "celebdf",
+    "model": "ensemble (soft voting, mean of members)",
+    "threshold": 0.852682,
+    "fpr_at_default_0.5": 0.639474,
+    "fpr_at_chosen": 0.197368,
+    "fake_recall_at_default_0.5": 0.992515,
+    "fake_recall_at_chosen": 0.762573,
+    "real_recall_at_chosen": 0.802632
   },
   {
     "domain": "celebdf",
@@ -31,21 +37,17 @@
     "fpr_at_chosen": 0.1,
     "fake_recall_at_default_0.5": 0.991345,
     "fake_recall_at_chosen": 0.862456,
-    "real_recall_at_chosen": 0.9,
-    "fpr_constrained_threshold": 0.997554,
-    "target_fpr_achievable": true
+    "real_recall_at_chosen": 0.9
   },
   {
-    "domain": "dfdc",
-    "model": "efficientnet_b3.ra2_in1k",
-    "threshold": 0.210677,
-    "fpr_at_default_0.5": 0.35,
-    "fpr_at_chosen": 0.41,
-    "fake_recall_at_default_0.5": 0.759091,
-    "fake_recall_at_chosen": 0.872727,
-    "real_recall_at_chosen": 0.59,
-    "fpr_constrained_threshold": 0.998724,
-    "target_fpr_achievable": true
+    "domain": "celebdf",
+    "model": "yolo26n-cls",
+    "threshold": 0.914433,
+    "fpr_at_default_0.5": 0.660526,
+    "fpr_at_chosen": 0.260526,
+    "fake_recall_at_default_0.5": 0.990409,
+    "fake_recall_at_chosen": 0.814035,
+    "real_recall_at_chosen": 0.739474
   },
   {
     "domain": "dfdc",
@@ -55,8 +57,36 @@
     "fpr_at_chosen": 0.04,
     "fake_recall_at_default_0.5": 0.913636,
     "fake_recall_at_chosen": 0.904545,
-    "real_recall_at_chosen": 0.96,
-    "fpr_constrained_threshold": 0.88507,
-    "target_fpr_achievable": true
+    "real_recall_at_chosen": 0.96
+  },
+  {
+    "domain": "dfdc",
+    "model": "efficientnet_b3.ra2_in1k",
+    "threshold": 0.210677,
+    "fpr_at_default_0.5": 0.35,
+    "fpr_at_chosen": 0.41,
+    "fake_recall_at_default_0.5": 0.759091,
+    "fake_recall_at_chosen": 0.872727,
+    "real_recall_at_chosen": 0.59
+  },
+  {
+    "domain": "dfdc",
+    "model": "ensemble (soft voting, mean of members)",
+    "threshold": 0.524415,
+    "fpr_at_default_0.5": 0.13,
+    "fpr_at_chosen": 0.11,
+    "fake_recall_at_default_0.5": 0.918182,
+    "fake_recall_at_chosen": 0.918182,
+    "real_recall_at_chosen": 0.89
+  },
+  {
+    "domain": "dfdc",
+    "model": "yolo26n-cls",
+    "threshold": 0.540567,
+    "fpr_at_default_0.5": 0.21,
+    "fpr_at_chosen": 0.15,
+    "fake_recall_at_default_0.5": 0.872727,
+    "fake_recall_at_chosen": 0.836364,
+    "real_recall_at_chosen": 0.85
   }
 ]

@@ -1,0 +1,34 @@
+{
+  "domain": "dfdc",
+  "model_name": "yolo26n-cls",
+  "checkpoint": "E:\\deepfake\\runs\\yolo_cls\\dfdc\\deepfake_dfdc\\weights\\best.pt",
+  "validation_dir": "E:\\deepfake\\data\\processed\\dfdc\\val",
+  "validation_samples": 320,
+  "target_false_positive_rate": 0.01,
+  "target_fpr_achievable": true,
+  "chosen_threshold": 0.540567,
+  "chosen_policy": "youden (maximises TPR - FPR)",
+  "at_chosen_threshold": {
+    "threshold": 0.540567,
+    "fake_recall": 0.836364,
+    "real_recall": 0.85,
+    "false_positive_rate": 0.15,
+    "precision": 0.924623
+  },
+  "fpr_constrained_threshold": 0.777475,
+  "at_fpr_constrained_threshold": {
+    "threshold": 0.777475,
+    "fake_recall": 0.627273,
+    "real_recall": 0.99,
+    "false_positive_rate": 0.01,
+    "precision": 0.992806
+  },
+  "at_default_0.5": {
+    "threshold": 0.503358,
+    "fake_recall": 0.872727,
+    "real_recall": 0.79,
+    "false_positive_rate": 0.21,
+    "precision": 0.901408
+  },
+  "note": "Measured on the validation split only; the test split is never used for threshold selection."
+}

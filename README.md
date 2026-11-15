@@ -64,30 +64,45 @@ domain-specific.
 
 | Train domain | Test domain | EfficientNet-B3 | ConvNeXt-Tiny | YOLO26n-cls | Ensemble |
 |---|---|---|---|---|---|
-| Celeb-DF v2 | Celeb-DF v2 *(in-domain)* | 0.7684 | 0.9196 | 0.9403 | 0.9140 |
-| Celeb-DF v2 | DFDC *(cross)* | 0.3822 | 0.5933 | 0.6489 | 0.5444 |
-| Celeb-DF v2 | Real-Life *(cross)* | 0.6262 | 0.6533 | 0.5113 | 0.5971 |
+| Celeb-DF v2 | Celeb-DF v2 *(in-domain)* | 0.7682 | 0.9196 | 0.9403 | 0.9139 |
+| Celeb-DF v2 | DFDC *(cross)* | 0.3811 | 0.5933 | 0.6489 | 0.5467 |
+| Celeb-DF v2 | Real-Life *(cross)* | 0.6260 | 0.6533 | 0.5114 | 0.5968 |
 | DFDC | Celeb-DF v2 *(cross)* | 0.6064 | 0.7710 | 0.6697 | 0.7217 |
-| DFDC | DFDC *(in-domain)* | 0.6044 | 0.8233 | 0.8678 | 0.8211 |
-| DFDC | Real-Life *(cross)* | 0.4497 | 0.3929 | 0.3626 | 0.4014 |
+| DFDC | DFDC *(in-domain)* | 0.6044 | 0.8233 | 0.8667 | 0.8211 |
+| DFDC | Real-Life *(cross)* | 0.4496 | 0.3929 | 0.3626 | 0.4014 |
+
+The `Threshold` column of `reports/cross_dataset/cross_table.csv` records the operating
+point every row was measured at: each model's own calibrated threshold, not an arbitrary
+0.5. ROC-AUC and Brier are threshold-free, so they do not change with it.
 
 **Reading the matrix.** Each model is strongest on the domain it was trained on, drops when
-moved to an unseen dataset, and is weakest on the in-the-wild Real-Life set. Note that
-Celeb-DF v2's test split is 91.2% fake, so raw accuracy on that split is inflated by the
-majority class — ROC-AUC and Brier are the meaningful columns there. The DFDC test split is
-balanced (30 real / 30 fake).
+moved to an unseen dataset, and is weakest on the in-the-wild Real-Life set - where the
+DFDC-trained models score below chance. Note that Celeb-DF v2's test split is 91.2% fake,
+so raw accuracy on that split is inflated by the majority class - ROC-AUC and Brier are the
+meaningful columns there. The DFDC test split is balanced (30 real / 30 fake).
 
 ### 2. In-Domain Detail (Trained on Celeb-DF v2, Tested on Celeb-DF v2)
 
 *Test split composition: 4,440 fake, 425 real (4,865 total, 91.26% fake).*
-> ⚠️ **Evaluation Integrity Disclosure**: Because 91.26% of the test set is Fake, raw accuracy is strongly biased towards the majority class. **Balanced Accuracy** (average of real and fake recall) provides the true uninflated classification capability:
+> ⚠️ **Evaluation Integrity Disclosure**: Because 91.26% of the test set is Fake, raw accuracy is strongly biased towards the majority class. **Balanced Accuracy** (average of real and fake recall) provides the true uninflated classification capability. Every row is measured at that model's **calibrated operating point** (last column), chosen on the validation split - never at an arbitrary 0.5:
 
-| Architecture | Raw Accuracy | Balanced Accuracy | Real Recall | Fake Recall | F1-Score | ROC-AUC | Brier Score (lower is better) | Latency (CPU) |
+| Architecture | Raw Accuracy | Balanced Accuracy | Real Recall | Fake Recall | F1-Score | ROC-AUC | Brier Score (lower is better) | Operating Point |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **YOLO26n-cls** | **95.17%** | **79.06%** | **59.53%** | **98.58%** | **97.39%** | **0.9403** | **0.0399** | 14.18 ms |
-| **ConvNeXt-Tiny** | **94.45%** | **71.53%** | **43.76%** | **99.30%** | **97.03%** | **0.9196** | **0.0539** | 90.11 ms |
-| **Soft-Voting Ensemble** | **94.68%** | **75.91%** | **53.18%** | **98.65%** | **97.13%** | **0.9140** | **0.0563** | 172.06 ms |
-| **EfficientNet-B3** | **81.34%** | **68.39%** | **52.71%** | **84.08%** | **89.16%** | **0.7684** | **0.1449** | 67.77 ms |
+| **YOLO26n-cls** | **82.88%** | **85.19%** | **88.00%** | **82.39%** | **89.78%** | **0.9403** | **0.0399** | 0.9144 |
+| **ConvNeXt-Tiny** | **85.86%** | **85.12%** | **84.24%** | **86.01%** | **91.74%** | **0.9196** | **0.0539** | 0.8183 |
+| **Soft-Voting Ensemble** | **74.57%** | **82.24%** | **91.53%** | **72.95%** | **83.97%** | **0.9139** | **0.0562** | 0.8527 |
+| **EfficientNet-B3** | **63.68%** | **70.21%** | **78.12%** | **62.30%** | **75.79%** | **0.7682** | **0.1448** | 0.9323 |
+
+Latency is unchanged and measured on CPU: YOLO 14.18 ms, ConvNeXt 90.11 ms, EfficientNet 67.77 ms,
+ensemble 172.06 ms per image (`reports/speed_table.csv`).
+
+The operating points are honest trade-offs, not improvements everywhere: calibrating
+EfficientNet-B3 on Celeb-DF v2 lowers the false-positive rate on authentic faces from 51.6% to
+24.5%, at the cost of recalling 87% instead of 93% of fakes at 0.5. On DFDC the calibrated
+EfficientNet-B3 point trades the other way (FPR 35% → 41%). Both are recorded in
+`reports/calibration_summary.json`.
+
+---
 
 ### 3. Training Status
 
@@ -254,15 +269,24 @@ threshold selection):
 
 | Domain | Model | Threshold | FPR at 0.5 | FPR at threshold | Fake recall at threshold |
 |---|---|---:|---:|---:|---:|
-| celebdf | efficientnet_b3.ra2_in1k | 0.9323 | 51.6% | 24.5% | 65.8% |
 | celebdf | convnext_tiny.fb_in22k_ft_in1k | 0.8183 | 75.5% | 28.4% | 87.1% |
+| celebdf | efficientnet_b3.ra2_in1k | 0.9323 | 51.6% | 24.5% | 65.8% |
+| celebdf | ensemble (soft voting, mean of members) | 0.8527 | 63.9% | 19.7% | 76.3% |
 | celebdf | resnet18 | 0.9576 | 46.8% | 10.0% | 86.2% |
-| dfdc | efficientnet_b3.ra2_in1k | 0.2107 | 35.0% | 41.0% | 87.3% |
+| celebdf | yolo26n-cls | 0.9144 | 66.1% | 26.1% | 81.4% |
 | dfdc | convnext_tiny.fb_in22k_ft_in1k | 0.5245 | 7.0% | 4.0% | 90.5% |
-
+| dfdc | efficientnet_b3.ra2_in1k | 0.2107 | 35.0% | 41.0% | 87.3% |
+| dfdc | ensemble (soft voting, mean of members) | 0.5244 | 13.0% | 11.0% | 91.8% |
+| dfdc | yolo26n-cls | 0.5406 | 21.0% | 15.0% | 83.6% |
 > **Read this honestly.** Calibration substantially reduces the false-positive
 > rate, but a 10-28% FPR is still far too high to deploy against real people.
 > The underlying problem is detector quality on this data, not the threshold.
+> One entry trades the other way: on DFDC, EfficientNet-B3's balanced point
+> RAISES the false-positive rate from 35.0% to 41.0% because its validation
+> curve has no better compromise - calibration is a measured trade-off, not a
+> uniform improvement. YOLO26n-cls and the soft-voting ensemble are calibrated
+> the same way; the ensemble is its own score distribution, so a member's
+> threshold does not transfer to it.
 
 ### Frequency-domain branch (`evaluation/spectral.py`)
 

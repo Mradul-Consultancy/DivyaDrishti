@@ -282,6 +282,67 @@ def collect_yolo_probabilities(
     }
 
 
+
+def calibrate_yolo(
+    checkpoint: Path,
+    val_dir: Path,
+    domain: str,
+    target_fpr: float = DEFAULT_TARGET_FPR,
+    min_fake_recall: float = 0.10,
+    device: Optional[str] = None,
+    batch_size: int = 32,
+) -> Dict[str, Any]:
+    """
+    Calibrates the YOLO classifier on the validation split.
+
+    YOLO had no calibration artefact, so the cross-table was applying the
+    ENSEMBLE's threshold to YOLO's own scores - a number measured on a
+    different score distribution. This measures YOLO's operating point like
+    every other model and writes threshold_yolo26n-cls.json.
+    """
+    data = collect_yolo_probabilities(checkpoint, val_dir, device=device, batch_size=batch_size)
+    curve = threshold_curve(data["probs"], data["labels"])
+    constrained, target_met = choose_threshold(curve, target_fpr, min_fake_recall)
+    default_050 = min(curve, key=lambda r: abs(r["threshold"] - 0.5))
+    youden = youden_threshold(curve)
+
+    def _pack(r):
+        return {
+            "threshold": round(r["threshold"], 6),
+            "fake_recall": round(r["fake_recall"], 6),
+            "real_recall": round(r["real_recall"], 6),
+            "false_positive_rate": round(r["false_positive_rate"], 6),
+            "precision": round(r["precision"], 6),
+        }
+
+    report = {
+        "domain": domain,
+        "model_name": "yolo26n-cls",
+        "checkpoint": str(checkpoint),
+        "validation_dir": str(val_dir),
+        "validation_samples": data["n"],
+        "target_false_positive_rate": target_fpr,
+        "target_fpr_achievable": target_met,
+        "chosen_threshold": round(youden["threshold"], 6),
+        "chosen_policy": "youden (maximises TPR - FPR)",
+        "at_chosen_threshold": _pack(youden),
+        "fpr_constrained_threshold": round(constrained["threshold"], 6),
+        "at_fpr_constrained_threshold": _pack(constrained),
+        "at_default_0.5": _pack(default_050),
+        "note": (
+            "Measured on the validation split only; the test split is never "
+            "used for threshold selection."
+        ),
+    }
+
+    out_dir = config.CHECKPOINT_DIR / domain
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "threshold_yolo26n-cls.json"
+    out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report["written_to"] = str(out_path)
+    return report
+
+
 def calibrate_ensemble(
     checkpoints: Dict[str, Path],
     yolo_checkpoint: Path,

@@ -157,6 +157,9 @@ def resolve_operating_points(model_names: Optional[List[str]] = None) -> Dict[st
     points: Dict[str, Dict[str, float]] = {}
     for domain in TRAIN_DATASETS:
         per_model = {name: load_threshold(domain, name) for name in names}
+        # YOLO has its own calibration artefact; applying the ensemble's
+        # threshold to YOLO scores would report a decision rule nobody runs.
+        per_model["yolo26n-cls"] = load_threshold(domain, "yolo26n-cls", default=0.5)
         # The ensemble has its own calibration: the mean of the members'
         # P(fake) has a different distribution, and a member's threshold
         # starved it (F1 = 0 at a member's 0.93 on Celeb-DF).
@@ -344,19 +347,16 @@ def evaluate_yolo_on_dir(
     fake_idx = next((k for k, v in names.items() if v.lower() == "fake"), 0)
     real_idx = next((k for k, v in names.items() if v.lower() == "real"), 1)
 
-    valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-    image_paths: List[Tuple[Path, int]] = []
-    for cls_name, label_idx in [("real", config.REAL_LABEL_IDX), ("fake", config.FAKE_LABEL_IDX)]:
-        cls_dir = eval_path / cls_name
-        if cls_dir.exists():
-            for p in cls_dir.iterdir():
-                if p.suffix.lower() in valid_exts:
-                    image_paths.append((p, label_idx))
-
+    # The probability array is cached and later averaged with the timm
+    # models' arrays, so the order MUST be the canonical DeepfakeDataset
+    # order (classes sorted alphabetically, i.e. fake before real). Listing
+    # real first here reversed the class order relative to the timm arrays
+    # and silently averaged probabilities belonging to different images -
+    # which showed up as a below-chance in-domain ensemble AUC.
+    image_paths = _collect_samples(eval_path)
     if not image_paths:
         return None
     y_true, y_probs_all = [], []
-    # YOLO inference in batches of image file paths
     all_paths = [str(p) for p, _ in image_paths]
     all_labels = [lbl for _, lbl in image_paths]
 
@@ -438,7 +438,8 @@ def evaluate_ensemble_on_dir(
         # Reuse the probabilities already computed for this model's own row
         # instead of re-running inference: it is ~3x cheaper and guarantees
         # the ensemble is built from exactly the scores the rows report.
-        cached = _PROB_CACHE.get(_cache_key(disp_name, eval_path))
+        timm_key = timm_model_names.get(disp_name, disp_name)
+        cached = _PROB_CACHE.get(_cache_key(timm_key, eval_path))
         if cached is not None:
             model_probs[disp_name] = cached
             if ground_truth is None:
@@ -898,7 +899,7 @@ def run_cross_table(args):
                 continue
             done = results[train_ds].get(test_name) or {}
             expected = {"EfficientNet-B3", "ConvNeXt-Tiny", "YOLO26n-cls", "Ensemble"}
-            if expected.issubset(set(done.keys())) and all(done.get(k) for k in expected):
+            if expected.issubset(set(done.keys())) and all(done.get(k) for k in expected) and not only_pair:
                 logger.info(f"\n  → [{test_name}] already evaluated - skipping")
                 continue
 
@@ -931,7 +932,7 @@ def run_cross_table(args):
                 m = _with_cpu_fallback(
                     evaluate_yolo_on_dir, yolo_ckpt, test_base_dir,
                     batch_size=args.batch_size,
-                    threshold=ops.get("ensemble", 0.5),
+                    threshold=ops.get("yolo26n-cls", 0.5),
                     device=device)
                 results[train_ds][test_name]["YOLO26n-cls"] = m
                 if m:
@@ -999,6 +1000,8 @@ def main():
         epilog=__doc__,
     )
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--force", action="store_true",
+                        help="Ignore any partial checkpoint and start from scratch")
     parser.add_argument(
         "--only", type=str, default=None,
         help="Restrict the run to one cell, as TRAIN:TEST (e.g. celebdf:CelebDF). "
