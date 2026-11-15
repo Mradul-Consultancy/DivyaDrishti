@@ -1,0 +1,53 @@
+{
+  "domain": "dfdc",
+  "split_mode": "identity",
+  "primary_identity_overlap": {
+    "train_val": [],
+    "train_test": [],
+    "val_test": []
+  },
+  "primary_overlap_is_empty": true,
+  "donor_identity_overlap_ids": {
+    "train_val": [],
+    "train_test": [],
+    "val_test": []
+  },
+  "donor_exposure": {
+    "test_donors_seen_in_train": {
+      "fake_videos_in_split": 0,
+      "fake_videos_with_donor_in_other_split": 0,
+      "video_share": null,
+      "faces_share": null
+    },
+    "val_donors_seen_in_train": {
+      "fake_videos_in_split": 0,
+      "fake_videos_with_donor_in_other_split": 0,
+      "video_share": null,
+      "faces_share": null
+    },
+    "test_donors_seen_in_val": {
+      "fake_videos_in_split": 0,
+      "fake_videos_with_donor_in_other_split": 0,
+      "video_share": null,
+      "faces_share": null
+    }
+  },
+  "source_video_exposure": {
+    "test_source_video_in_other_split": {
+      "fake_videos_in_split": 0,
+      "fake_videos_with_source_video_in_other_split": 0,
+      "source_video_split_unknown": 0,
+      "video_share": null
+    },
+    "val_source_video_in_other_split": {
+      "fake_videos_in_split": 22,
+      "fake_videos_with_source_video_in_other_split": 0,
+      "source_video_split_unknown": 0,
+      "video_share": 0.0
+    }
+  },
+  "shipped_audit_flags": {
+    "zero_leakage_guaranteed": true,
+    "swap_partner_overlap_is_advisory": null
+  }
+}

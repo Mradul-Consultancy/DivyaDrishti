@@ -1,0 +1,30 @@
+{
+  "generated_utc": "2026-11-15T11:17:19+00:00",
+  "test_split": "data\\processed\\celebdf\\test",
+  "device": "cuda",
+  "torch": "2.9.1+cu128",
+  "auc_tolerance": 0.01,
+  "models": {
+    "efficientnet_b3.ra2_in1k": {
+      "status": "measured",
+      "checkpoint": "models\\checkpoints\\efficientnet_b3.ra2_in1k_best.pth",
+      "roc_auc": 0.7683,
+      "n_images": 4865,
+      "transform": "timm-native-eval (get_timm_transforms, is_training=False)"
+    },
+    "convnext_tiny.fb_in22k_ft_in1k": {
+      "status": "measured",
+      "checkpoint": "models\\checkpoints\\convnext_tiny.fb_in22k_ft_in1k_best.pth",
+      "roc_auc": 0.9196,
+      "n_images": 4865,
+      "transform": "timm-native-eval (get_timm_transforms, is_training=False)"
+    },
+    "resnet18": {
+      "status": "measured",
+      "checkpoint": "models\\checkpoints\\resnet18_best.pth",
+      "roc_auc": 0.9717,
+      "n_images": 4865,
+      "transform": "torchvision val (get_val_transforms)"
+    }
+  }
+}

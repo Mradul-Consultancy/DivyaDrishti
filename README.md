@@ -34,7 +34,11 @@ Place the `.pth` files into `models/checkpoints/`:
 > path used when a domain-specific checkpoint is absent, and it now holds the Celeb-DF v2
 > weights listed above. The per-domain checkpoints live in `models/checkpoints/celebdf/` and
 > `models/checkpoints/dfdc/`; those are what the cross-dataset table below was measured
-> with. Every figure here is reproducible with `python scripts/build_cross_table.py`.
+> with. The ROC-AUC column above is re-measured end-to-end by
+> `python scripts/probe_shipped_checkpoints.py` and recorded in
+> `reports/shipped_checkpoint_probe.json` (EfficientNet-B3 **0.7683**, ConvNeXt-Tiny **0.9196**,
+> ResNet-18 **0.9717** on 4,865 Celeb-DF v2 test images); the test suite fails if the released
+> weights drift from that record.
 
 ---
 
@@ -54,6 +58,35 @@ python scripts/build_cross_table.py      # -> reports/cross_dataset_table.csv
 python main.py benchmark-speed --device cpu   # -> reports/speed_table.csv
 python scripts/regenerate_report.py      # -> reports/FINAL_CLIENT_DELIVERABLE.md
 ```
+
+### 0. Split integrity & donor-identity disclosure (measured)
+
+`identity_primary` keeps the **primary** identity of every face swap strictly
+disjoint across train/val/test — verified in the `zero_leakage_audit` embedded
+in both shipped manifests (zero overlap in all three split pairs, both domains).
+The **donor** identity of a swap (`id52_id16_0000.mp4`: id16 donates their face
+to id52) is treated as *advisory*, because Celeb-DF v2's chained swap graph
+would collapse nearly every identity into one cluster under strict donor
+disjointness. That trade-off has a measured cost (`reports/donor_overlap_celebdf.json`,
+regenerable with `python scripts/measure_donor_overlap.py`):
+
+| Exposure (Celeb-DF v2) | Fake videos affected | Share |
+|---|---|---:|
+| Test fake videos whose donor face appears in train | 884 / 884 | **100.0%** |
+| Validation fake videos whose donor face appears in train | 853 / 853 | **100.0%** |
+| Test fake videos whose donor face appears in val | 721 / 884 | 81.6% |
+
+Because the model may have seen a test video's donor anatomy during training,
+**in-domain Celeb-DF metrics are optimistic by an unknown margin**; this is one
+plausible contributor to the steep out-of-domain collapse (section 1). DFDC's
+sanitised mirror renames videos to opaque hashes, so its donor overlap is not
+measurable from the shipped data; the measurable axis — source-video overlap —
+is 0.0 (every val fake's source real video is colocated in val,
+`reports/donor_overlap_dfdc.json`). Note also that the DFDC in-domain test
+directory is deliberately small (30 real / 30 fake images), so its column
+carries high sampling noise. A strict `--split-mode identity` option (donors
+merged) exists in `preprocessing/extract_faces_from_videos.py`, at the cost of
+leaving almost no trainable data on Celeb-DF v2.
 
 ### 1. Cross-Dataset ROC-AUC Matrix
 
