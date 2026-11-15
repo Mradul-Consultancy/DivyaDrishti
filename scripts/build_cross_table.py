@@ -33,8 +33,14 @@ import types
 import argparse
 import traceback
 import itertools
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
+
+# The cross-table loads three backbones in sequence on one card. Without
+# expandable segments the allocator fragments and the third model fails with
+# an out-of-memory error even though the total fits.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import numpy as np
 import matplotlib
@@ -404,11 +410,20 @@ def evaluate_ensemble_on_dir(
     ground_truth = None
 
     for disp_name, ckpt in timm_checkpoints.items():
-        m_name = timm_model_names[disp_name]
-        m = _timm.create_model(m_name, pretrained=False, num_classes=2)
         if not ckpt.exists():
             logger.warning(f"  Ensemble: missing {disp_name} checkpoint {ckpt}")
             continue
+        # Reuse the probabilities already computed for this model's own row
+        # instead of re-running inference: it is ~3x cheaper and guarantees
+        # the ensemble is built from exactly the scores the rows report.
+        cached = _PROB_CACHE.get(_cache_key(disp_name, eval_path))
+        if cached is not None:
+            model_probs[disp_name] = cached
+            if ground_truth is None:
+                ground_truth = _labels_for(eval_path)
+            continue
+        m_name = timm_model_names[disp_name]
+        m = _timm.create_model(m_name, pretrained=False, num_classes=2)
         sd = torch.load(ckpt, map_location=device, weights_only=True)
         m.load_state_dict(sd["state_dict"])
         m = m.to(device)
@@ -425,6 +440,7 @@ def evaluate_ensemble_on_dir(
                 probs_list.extend(p[:, config.FAKE_LABEL_IDX].cpu().numpy().tolist())
                 labels_list.extend(lbs.numpy().tolist())
         model_probs[disp_name] = np.array(probs_list)
+        _PROB_CACHE[_cache_key(disp_name, eval_path)] = np.array(probs_list)
         if ground_truth is None:
             ground_truth = np.array(labels_list)
 
@@ -435,21 +451,25 @@ def evaluate_ensemble_on_dir(
     # ["real", "fake"] listing, which reversed the class order relative to
     # DeepfakeDataset and silently paired each image's YOLO probability with
     # a different image's timm probabilities.
-    if yolo_checkpoint.exists():
+    cached_yolo = _PROB_CACHE.get(_cache_key("yolo26n-cls", eval_path))
+    if cached_yolo is not None:
+        model_probs["YOLO26n-cls"] = cached_yolo
+        if ground_truth is None:
+            ground_truth = _labels_for(eval_path)
+    elif yolo_checkpoint.exists():
         from ultralytics import YOLO
         yolo = YOLO(str(yolo_checkpoint))
         names = yolo.names
         fake_idx = next((k for k, v in names.items() if v.lower() == "fake"), 0)
         samples = _collect_samples(eval_path)
         if samples:
-            device_str = "0" if device.type == "cuda" else "cpu"
-            # stream=True keeps only one Result alive at a time (see the
-            # comment in evaluate_yolo_on_dir).
+            device_str = "0" if (device.type == "cuda") else "cpu"
+            # stream=True keeps only one Result alive at a time.
             results = yolo.predict([str(p) for p, _ in samples], imgsz=224, batch=batch_size,
                                    device=device_str, verbose=False, stream=True)
-            model_probs["YOLO26n-cls"] = np.array(
-                [float(r.probs.data.cpu().numpy()[fake_idx]) for r in results]
-            )
+            arr = np.array([float(r.probs.data.cpu().numpy()[fake_idx]) for r in results])
+            model_probs["YOLO26n-cls"] = arr
+            _PROB_CACHE[_cache_key("yolo26n-cls", eval_path)] = arr
 
     if not model_probs or ground_truth is None:
         return None
@@ -775,8 +795,26 @@ def run_cross_table(args):
     # an arbitrary 0.5.
     operating_points = resolve_operating_points(list(timm_meta.values()))
 
+    # Results are checkpointed after every evaluation so an interrupted run
+    # (a machine restart, a killed process) does not throw away hours of
+    # work, and so a re-run can pick up where it stopped.
+    checkpoint_path = OUT_DIR / "cross_table.partial.json"
+    results: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    if checkpoint_path.exists() and not getattr(args, "force", False):
+        try:
+            results = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            logger.info(f"Resuming from {checkpoint_path}")
+        except Exception:
+            results = {}
+
+    def _save_checkpoint():
+        try:
+            checkpoint_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.warning(f"Could not write the partial checkpoint: {exc}")
+
     for train_ds in TRAIN_DATASETS:
-        results[train_ds] = {}
+        results.setdefault(train_ds, {})
         logger.info(f"\n{'='*70}")
         logger.info(f"  TRAIN DOMAIN: {train_ds.upper()}")
         logger.info(f"{'='*70}")
@@ -806,7 +844,13 @@ def run_cross_table(args):
         )
 
         for test_name, test_base_dir in TEST_DATASETS.items():
-            results[train_ds][test_name] = {}
+            done = results[train_ds].get(test_name) or {}
+            expected = {"EfficientNet-B3", "ConvNeXt-Tiny", "YOLO26n-cls", "Ensemble"}
+            if expected.issubset(set(done.keys())) and all(done.get(k) for k in expected):
+                logger.info(f"\n  → [{test_name}] already evaluated - skipping")
+                continue
+
+            results[train_ds].setdefault(test_name, {})
             logger.info(f"\n  → Evaluating on [{test_name}]  ({test_base_dir})")
 
             # timm models
@@ -822,6 +866,7 @@ def run_cross_table(args):
                     results[train_ds][test_name][disp_name] = m
                     if m:
                         logger.info(f"      AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
+                    _save_checkpoint()
                 except Exception as exc:
                     logger.error(f"    {disp_name} failed: {exc}\n{traceback.format_exc()}")
                     results[train_ds][test_name][disp_name] = None
@@ -841,6 +886,7 @@ def run_cross_table(args):
                     logger.info(f"      AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
                 else:
                     logger.warning("      YOLO26n-cls: no metrics produced (checkpoint missing or no samples)")
+                _save_checkpoint()
             except Exception as exc:
                 logger.error(f"    YOLO failed: {exc}\n{traceback.format_exc()}")
                 results[train_ds][test_name]["YOLO26n-cls"] = None
@@ -859,6 +905,7 @@ def run_cross_table(args):
                 results[train_ds][test_name]["Ensemble"] = m
                 if m:
                     logger.info(f"      Ensemble AUC={m['roc_auc']:.4f}  F1={m['f1_score']:.4f}  Brier={m['brier_score']:.4f}")
+                _save_checkpoint()
             except Exception as exc:
                 logger.error(f"    Ensemble failed: {exc}\n{traceback.format_exc()}")
                 results[train_ds][test_name]["Ensemble"] = None
@@ -870,6 +917,10 @@ def run_cross_table(args):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     logger.info(f"\nSaved JSON: {json_path}")
+    try:
+        checkpoint_path.unlink()
+    except OSError:
+        pass
 
     md_path = OUT_DIR / "cross_table.md"
     md = build_markdown_table(results, domain_note)
