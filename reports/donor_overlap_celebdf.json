@@ -155,5 +155,9 @@
   "shipped_audit_flags": {
     "zero_leakage_guaranteed": true,
     "swap_partner_overlap_is_advisory": true
+  },
+  "test_dir": {
+    "real": 425,
+    "fake": 4440
   }
 }

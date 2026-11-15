@@ -312,6 +312,60 @@ def build_findings_section(summary: dict, cross_rows: list) -> str:
     return "\n".join(lines)
 
 
+def build_donor_disclosure_section() -> str:
+    """
+    Split-integrity disclosure, built from reports/donor_overlap_*.json.
+
+    Primary-identity disjointness is enforced and audited; the donor overlap
+    of `identity_primary` is advisory and MEASURED here so the caveat can be
+    quoted with numbers instead of hand-waving.
+    """
+    lines = []
+
+    def exposure(art: dict, key: str) -> str:
+        e = (art.get("donor_exposure") or {}).get(key) or {}
+        share = e.get("video_share")
+        if share is None:
+            return "no fake videos in that split"
+        n_hit, n = e.get("fake_videos_with_donor_in_other_split"), e.get("fake_videos_in_split")
+        return f"{share * 100:.1f}% ({n_hit}/{n} fake videos)"
+
+    celeb = REPORTS / "donor_overlap_celebdf.json"
+    if celeb.exists():
+        art = load_json(celeb)
+        empty = art.get("primary_overlap_is_empty")
+        lines.append(
+            f"- **Primary identity overlap: {'none' if empty else 'PRESENT - INVESTIGATE'}** "
+            "across train/val/test in every domain (enforced by the identity-aware "
+            "splitter and recorded in each shipped manifest's `zero_leakage_audit`)."
+        )
+        lines.append(
+            "- **Donor-identity exposure (Celeb-DF v2, `identity_primary` split)**: "
+            f"{exposure(art, 'test_donors_seen_in_train')} in the test split and "
+            f"{exposure(art, 'val_donors_seen_in_train')} in the validation split have a "
+            "donor whose face appears somewhere in training. The model may therefore "
+            "partly recognise a test donor's anatomy rather than purely reading "
+            "synthesis artefacts, so **in-domain Celeb-DF metrics are optimistic by an "
+            "unknown margin**. Strict donor disjointness is available "
+            "(`--split-mode identity`) but collapses Celeb-DF v2's chained swap graph "
+            "into one cluster, leaving almost no data to train on."
+        )
+    dfdc = REPORTS / "donor_overlap_dfdc.json"
+    if dfdc.exists():
+        art = load_json(dfdc)
+        td = art.get("test_dir") or {}
+        lines.append(
+            "- **DFDC donor identities are not recoverable** from the sanitised mirror "
+            "(videos are renamed to opaque hashes), so its donor overlap is unmeasured. "
+            "The measurable axis - source-video overlap - is 0.0: every validation "
+            "fake's source real video sits in the same split "
+            "(reports/donor_overlap_dfdc.json). The DFDC in-domain test column scores a "
+            f"small held-out image directory ({td.get('real', '?')} real / "
+            f"{td.get('fake', '?')} fake), so it carries high sampling noise."
+        )
+    return "\n".join(lines)
+
+
 def main():
     summary     = load_json(REPORTS / "evaluation_summary.json")
     cross_rows  = load_csv_rows(REPORTS / "cross_dataset_table.csv")
@@ -322,6 +376,7 @@ def main():
     training_md = build_training_status_section()
     operating_md = build_operating_points_section()
     spectral_md = build_spectral_section()
+    donor_md = build_donor_disclosure_section()
 
     # Read the template (which must NOT contain hard-coded numbers)
     if not TEMPLATE.exists():
@@ -337,6 +392,7 @@ def main():
         .replace("{{FINDINGS}}", findings_md)
         .replace("{{TRAINING_STATUS}}", training_md)
         .replace("{{OPERATING_POINTS}}", operating_md)
+        .replace("{{DONOR_OVERLAP}}", donor_md)
         .replace("{{SPECTRAL}}", spectral_md)
         .replace("{{DATE}}", date.today().isoformat())
     )

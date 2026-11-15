@@ -169,6 +169,18 @@ def measure(domain: str) -> dict:
         "zero_leakage_guaranteed": audit.get("zero_leakage_guaranteed"),
         "swap_partner_overlap_is_advisory": audit.get("swap_partner_overlap_is_advisory"),
     }
+
+    # Size of the held-out evaluation directory (what the in-domain test
+    # columns of the cross-dataset table actually score). The manifest's
+    # split bookkeeping and the image directory can differ (e.g. DFDC keeps
+    # a fixed 30/30 image test directory even though its manifest test
+    # bucket is empty), so both facts are recorded side by side.
+    test_dir = ROOT / "data" / "processed" / domain / "test"
+    result["test_dir"] = {
+        str(sub.name): sum(1 for _ in sub.iterdir() if sub.is_dir())
+        for sub in (test_dir / "real", test_dir / "fake")
+        if sub.is_dir()
+    }
     return result
 
 

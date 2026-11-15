@@ -23,10 +23,11 @@
 > evaluated on a dataset they were not trained on. Those published figures are cited as external
 > academic reference points for risk modelling, not as results of this project.
 
-> **Note on identity leakage**: DFDC groups fakes with their source video, but the same actor can
-> appear in different source videos. Some residual identity overlap may therefore remain even after
-> a correct identity-aware split. This is disclosed in the report and noted as a dataset-level
-> limitation.
+> **Note on identity leakage (measured)**: the identity-aware splitter enforces strict
+> *primary*-identity disjointness; the *donor* identity of a face swap is advisory and its
+> exposure is quantified below.
+>
+> {{DONOR_OVERLAP}}
 
 > **Note on the "Trained on" column**: a row marked *shared ckpt* was produced with the
 > shared/global checkpoint because no domain-specific checkpoint exists for that training
@@ -83,6 +84,9 @@ No sentence is hand-written, so this section cannot drift away from the results.
   behaviour for models trained on a single domain.
 - **Real-life performance**: The real-life image set consists of AI-generated faces
   from StyleGAN / Stable Diffusion. Results on live-capture deepfakes may differ.
+- **Split caveat**: Celeb-DF v2 in-domain metrics can be optimistic because a test video's
+  donor identity may appear in training (quantified in Section 2). DFDC's in-domain test
+  column rests on a small held-out directory and carries high sampling noise.
 - **Legal notice (AGPL licensing)**: Any AGPL-licensed component used in this pipeline requires
   that derivative source code be disclosed under the same licence. This is a **risk notice**, not
   legal advice. Independent legal counsel should be consulted before commercial deployment.
